@@ -64,9 +64,11 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
 
     def render_arena(values=None, error=None):
         from channels.payloads import load_payloads
+        want = "browser" if RUN_CONFIG.sandbox_backend == "steel" else "shell"
+        starters = [p for p in load_payloads() if p.get("mode", "shell") == want]
         return render_template(
             "index.html", levels=(1, 2, 3, 4), vectors=tuple(VECTOR_META),
-            starters=load_payloads(), config=RUN_CONFIG, stats=store.stats(),
+            starters=starters, config=RUN_CONFIG, stats=store.stats(),
             recent=store.recent(4), board=store.leaderboard(3),
             initial=values or {}, form_error=error, max_payload=MAX_PAYLOAD_CHARS,
         )
