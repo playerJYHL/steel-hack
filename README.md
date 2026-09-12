@@ -1,4 +1,4 @@
-# Break the Agent
+# Gaslight
 
 > A live red-team arena for **prompt injection**. Players don't jailbreak an AI
 > into being evil — they hide an instruction in the content an agent reads and
