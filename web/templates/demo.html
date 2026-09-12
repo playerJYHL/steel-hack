@@ -1,29 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Big screen · Break the Agent{% endblock %}
+{% block title %}Spectator | Break the Agent{% endblock %}
 {% block body_class %}demo-mode{% endblock %}
 {% block content %}
-<section class="demo" id="demo">
-  <div class="demo-panes">
-    <div class="demo-pane">
-      <h2>The trap</h2>
-      <div class="demo-meta" id="d-meta"></div>
-      <pre class="payload-box big" id="d-payload">waiting for an attack…</pre>
-    </div>
-    <div class="demo-pane center">
-      <h2>The agent</h2>
-      <div id="d-liveview" class="liveview big">
-        <p class="muted">live view appears here on the Steel path</p>
-      </div>
-    </div>
-    <div class="demo-pane">
-      <h2>Its thoughts</h2>
-      <ol class="trace big" id="d-trace"></ol>
-    </div>
-  </div>
-  <div class="demo-verdict" id="d-verdict"></div>
-</section>
+    <section class="page-heading compact">
+        <div>
+            <p class="eyebrow"><span class="signal"></span> SPECTATOR VIEW</p>
+            <h1>The arena, unfolding<span class="accent">.</span></h1>
+        </div>
+        <a class="secondary-button" href="{{ url_for('index') }}">Enter arena {{ icon("arrow-up-right") }}</a>
+    </section>
+    {% set spectator = true %}
+    {% include "_run.html" %}
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='arena.js') }}"></script>
-<script>ArenaDemo.init();</script>
+    <script>document.addEventListener('DOMContentLoaded', () => ArenaDemo.init());</script>
 {% endblock %}

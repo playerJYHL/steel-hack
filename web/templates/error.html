@@ -1,8 +1,3 @@
 {% extends "base.html" %}
-{% block content %}
-<section class="hero">
-  <h1>That submission didn't fly</h1>
-  <p class="lede">{{ message }}</p>
-  <p><a href="{{ url_for('index') }}">← back to the arena</a></p>
-</section>
-{% endblock %}
+{% block title %}{{ title or 'Unavailable' }} | Break the Agent{% endblock %}
+{% block content %}<section class="error-page">{{ icon("unplug") }}<p class="eyebrow">{{ code or 400 }} / UNAVAILABLE</p><h1>{{ title or "Submission not accepted" }}</h1><p class="lede">{{ message }}</p><a class="primary-button" href="{{ url_for('index') }}">{{ icon("arrow-left") }} Return to arena</a></section>{% endblock %}

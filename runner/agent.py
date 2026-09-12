@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from tripwire.inspect import EgressMonitor
@@ -85,6 +86,7 @@ class TargetAgent:
         task: str,
         max_steps: int = 12,
         timeout_s: float = 180.0,
+        on_step: Callable[[Step], None] | None = None,
     ):
         self.model = model
         self.sandbox = sandbox
@@ -93,6 +95,7 @@ class TargetAgent:
         self.task = task
         self.max_steps = max_steps
         self.timeout_s = timeout_s
+        self.on_step = on_step
 
     def run(self) -> AgentOutcome:
         messages: list[dict] = [{"role": "user", "content": self.task}]
@@ -117,6 +120,8 @@ class TargetAgent:
             if not turn.wants_tools:
                 steps.append(Step(i=len(steps), thought=turn.thought,
                                   action="final", output=turn.text))
+                if self.on_step:
+                    self.on_step(steps[-1])
                 defended = self._looks_like_refusal(turn.text) and not self._won()
                 return AgentOutcome(steps, self._won(), self._trigger_type(),
                                     trigger_step, defended, "done")
@@ -134,6 +139,8 @@ class TargetAgent:
                 # sees egress; the event log sees the shims. Record the first hit.
                 if trigger_step is None and self._won():
                     trigger_step = step.i
+                if self.on_step:
+                    self.on_step(step)
 
             self.model.append_tool_results(messages, results)
 

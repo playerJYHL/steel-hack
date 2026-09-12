@@ -16,7 +16,7 @@ import os
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
-from runner.contracts import ContractError, Submission
+from runner.contracts import ContractError, Submission, MAX_PAYLOAD_CHARS
 from runner.runner import RunConfig
 from tripwire.canary import Canary
 from tripwire.events import EventLog
@@ -30,6 +30,18 @@ RUN_CONFIG = RunConfig(
     model_backend=os.environ.get("ARENA_MODEL", "scripted"),
     sandbox_backend=os.environ.get("ARENA_SANDBOX", "local"),
 )
+
+LEVEL_META = {
+    1: ("Open target", "No defenses", "shield-off"),
+    2: ("Instruction boundary", "Data / instruction separation", "shield"),
+    3: ("Injection filter", "Detector before the agent", "shield-check"),
+    4: ("Full defense", "Layered defenses + DNS", "shield-ellipsis"),
+}
+VECTOR_META = {
+    "page_hidden_text": ("Hidden page text", "eye-off"),
+    "fake_system_block": ("System notice", "terminal"),
+    "poisoned_tool_return": ("Tool response", "code-xml"),
+}
 
 
 def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
@@ -45,16 +57,32 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
     from .payload_catalog import register_catalog
     register_catalog(app)
 
+    @app.context_processor
+    def arena_context():
+        return {"arena_config": RUN_CONFIG, "level_meta": LEVEL_META,
+                "vector_meta": VECTOR_META}
+
+    def render_arena(values=None, error=None):
+        from channels.payloads import load_payloads
+        return render_template(
+            "index.html", levels=(1, 2, 3, 4), vectors=tuple(VECTOR_META),
+            starters=load_payloads(), config=RUN_CONFIG, stats=store.stats(),
+            recent=store.recent(4), board=store.leaderboard(3),
+            initial=values or {}, form_error=error, max_payload=MAX_PAYLOAD_CHARS,
+        )
+
     # -- pages ---------------------------------------------------------------
 
     @app.get("/")
     def index():
-        from channels.payloads import load_payloads
-        return render_template(
-            "index.html", levels=(1, 2, 3, 4),
-            vectors=("page_hidden_text", "fake_system_block", "poisoned_tool_return"),
-            starters=load_payloads(), config=RUN_CONFIG,
-        )
+        previous = store.get(request.args["retry"]) if request.args.get("retry") else None
+        return render_arena(previous)
+
+    @app.get("/scenario")
+    def scenario_preview():
+        from channels.page_builder import build_page
+        return build_page(topic=RUN_CONFIG.topic, payload="",
+                          vector="page_hidden_text", canary=Canary.generate())
 
     @app.post("/submit")
     def submit():
@@ -66,7 +94,7 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
                 player=(request.form.get("player") or "anonymous").strip()[:40],
             ).validate()   # server-side check; the form's `required` is only advisory
         except (ContractError, ValueError) as exc:
-            return render_template("error.html", message=str(exc)), 400
+            return render_arena(request.form.to_dict(), str(exc)), 400
         store.enqueue(sub)
         return redirect(url_for("result_page", attack_id=sub.attack_id))
 
@@ -142,6 +170,11 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
     def healthz():
         return jsonify({"ok": True, "queued": store.stats()["queued"],
                         "backends": [RUN_CONFIG.model_backend, RUN_CONFIG.sandbox_backend]})
+
+    @app.errorhandler(404)
+    def not_found(_error):
+        return render_template("error.html", code=404, title="Run not found",
+                               message="This page or run is no longer available."), 404
 
     return app
 
