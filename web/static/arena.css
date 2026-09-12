@@ -1325,6 +1325,9 @@ main:has(#run-surface) {
 .run-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr);
+  /* A single row locked to the row height (not content) so a growing trace
+     scrolls internally instead of stretching the row and the live view. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 28px;
   align-items: stretch;
   /* Fill the remaining viewport (accounting for nav + heading + verdict strip)
@@ -1504,6 +1507,9 @@ main:has(#run-surface) {
   background: var(--bg-deep);
   position: relative;
   overflow: hidden;
+  /* Query container so the 16:9 stage can be sized against this area's real
+     height, picking whichever dimension is the limiter (no letterbox bars). */
+  container-type: size;
 }
 /* Faint scanline wash — reads as a monitored feed, never obscures content. */
 .liveview::after {
@@ -1522,14 +1528,38 @@ main:has(#run-surface) {
   opacity: 0.6;
   mix-blend-mode: multiply;
 }
-.liveview iframe {
+/* Center a 16:9 stage inside the live-view area so the Steel video fills its
+   iframe exactly (no letterbox bars) and never overflows the row height. */
+.viewer-stage {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.liveview iframe {
+  /* Fallback (no container queries): height-driven 16:9. Correct when the live
+     area is height-limited, which is the common laptop case. */
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
   border: 0;
   display: block;
+  margin: auto;
   background: white;
   position: relative;
   z-index: 1;
+}
+/* Enhancement: size the 16:9 box against the live area's real height so it is
+   correct for BOTH orientations and Steel fills its iframe exactly (no bars). */
+@supports (width: 1cqh) {
+  .liveview iframe {
+    width: min(100%, calc(100cqh * 16 / 9));
+    height: auto;
+    max-height: 100%;
+  }
 }
 .viewer-reference {
   height: 100%;
@@ -1643,6 +1673,7 @@ main:has(#run-surface) {
 }
 .trace-section {
   min-width: 0;
+  min-height: 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -2238,6 +2269,7 @@ main:has(#run-surface) {
   }
   .run-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     gap: 26px;
     /* Stacked on phones: revert to content height so both panels are usable. */
     height: auto;
@@ -2310,7 +2342,19 @@ main:has(#run-surface) {
     height: 32px;
   }
   .liveview {
-    min-height: 320px;
+    /* Stacked layout has no fixed row height, so let the live area itself be
+       16:9 (width-driven) and have the iframe fill it edge to edge. */
+    container-type: normal;
+    flex: none;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+  }
+  .liveview iframe {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    max-height: none;
   }
   .session-mode {
     display: none;
@@ -2798,6 +2842,74 @@ main:has(#run-surface) {
     height: auto;
     max-height: 400px;
     min-height: 180px;
+  }
+}
+/* Short viewports (laptops): cap the payload editor and tighten the hero +
+   builder spacing so the Launch button stays above the fold without scrolling.
+   Placed after the width media queries so it wins when both conditions match. */
+@media (max-height: 860px) {
+  main {
+    padding-top: 26px;
+  }
+  .arena-hero {
+    margin-bottom: 16px;
+  }
+  .arena-hero h1 {
+    font-size: 32px;
+  }
+  .arena-hero .lede {
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .arena-hero .flow-steps {
+    margin-top: 8px;
+  }
+  .arena-grid legend,
+  .arena-grid .section-heading {
+    margin-bottom: 12px;
+  }
+  .field-label {
+    margin-bottom: 6px;
+  }
+  .select-wrap {
+    margin-bottom: 12px;
+  }
+  .editor-body {
+    height: clamp(150px, 26vh, 250px);
+  }
+  .composer-actions {
+    margin-top: 14px;
+  }
+}
+@media (max-height: 760px) {
+  main {
+    padding-top: 20px;
+  }
+  .arena-hero {
+    margin-bottom: 12px;
+  }
+  .arena-hero h1 {
+    font-size: 28px;
+  }
+  .arena-hero .lede {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .arena-hero .flow-steps {
+    margin-top: 6px;
+  }
+  .arena-grid legend,
+  .arena-grid .section-heading {
+    margin-bottom: 10px;
+  }
+  .select-wrap {
+    margin-bottom: 10px;
+  }
+  .editor-body {
+    height: clamp(130px, 22vh, 220px);
+  }
+  .composer-actions {
+    margin-top: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

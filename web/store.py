@@ -97,6 +97,42 @@ class Store:
         ).fetchone()
         return _row_to_dict(row) if row else None
 
+    def list_sessions(self, limit: int = 24) -> list[dict]:
+        """Compact rows for the spectator gallery: every live run first (newest
+        first), then the most recent finished ones. Only the fields a tile needs
+        — never the payload text — so the wall stays light and nothing sensitive
+        leaks into a public view. Bounded and status-indexed."""
+        limit = max(1, min(int(limit), 48))
+        rows = self._conn().execute(
+            "SELECT attack_id, player, level, vector, status, submitted_at, "
+            "started_at, finished_at, progress_json, result_json FROM attacks "
+            "WHERE status IN ('running','done','error') "
+            "ORDER BY (status='running') DESC, "
+            "COALESCE(finished_at, started_at, submitted_at) DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            d = dict(row)
+            prog = _loads(d.pop("progress_json"))
+            res = _loads(d.pop("result_json"))
+            src = res or prog or {}
+            out.append({
+                "attack_id": d["attack_id"], "player": d["player"], "level": d["level"],
+                "vector": d["vector"], "status": d["status"],
+                "viewer_url": src.get("viewer_url"),
+                "triggered": bool((res or {}).get("triggered", False)),
+                "trigger_type": (res or {}).get("trigger_type"),
+                "defended": bool((res or {}).get("defended", False)),
+                "error": bool((res or {}).get("error")),
+                "score": (res or {}).get("score", 0),
+                "model_backend": src.get("model_backend"),
+                "sandbox_backend": src.get("sandbox_backend"),
+                "step_count": len(src.get("steps") or []),
+                "started_at": d["started_at"], "finished_at": d["finished_at"],
+            })
+        return out
+
     def next_queued(self) -> dict | None:
         row = self._conn().execute(
             "SELECT * FROM attacks WHERE status='queued' "
@@ -178,6 +214,15 @@ class Store:
             by_level[lvl] = sum(1 for w in self.leaderboard(10_000) if w["level"] == lvl)
         return {"total": total, "done": done, "queued": queued,
                 "wins": wins, "wins_by_level": by_level}
+
+
+def _loads(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:

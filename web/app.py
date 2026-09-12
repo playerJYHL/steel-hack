@@ -134,6 +134,16 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
     def api_leaderboard():
         return jsonify({"board": store.leaderboard(25), "stats": store.stats()})
 
+    @app.get("/api/sessions")
+    def api_sessions():
+        """The spectator wall: every live run plus the most recent finished ones.
+        Compact metadata only (no payload text); the limit is clamped in the store."""
+        try:
+            limit = int(request.args.get("limit", 24))
+        except (TypeError, ValueError):
+            limit = 24
+        return jsonify({"sessions": store.list_sessions(limit)})
+
     @app.get("/api/latest")
     def api_latest():
         """For the demo screen: the running attack, else the most recent one."""

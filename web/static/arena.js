@@ -643,7 +643,9 @@ class RunView {
         frame.referrerPolicy = "no-referrer";
         frame.allow = "fullscreen";
         frame.src = embedViewerUrl(url); // read-only embed
-        $("liveview").replaceChildren(frame);
+        const stage = node("div", "viewer-stage");
+        stage.append(frame);
+        $("liveview").replaceChildren(stage); // 16:9 stage, no letterbox
         this.idleMode = null;
       } else {
         this.idleMode = null;
