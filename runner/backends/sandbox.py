@@ -244,20 +244,33 @@ class SteelSandbox(Sandbox):
     EVENT_LOG = "/workspace/.arena/events.jsonl"
 
     def __init__(self, scenario: SeededScenario, event_log=None, *,
-                 client=None, api_key: str | None = None, install: bool = True,
-                 proxy_port: int | None = None):
+                 client=None, browser=None, api_key: str | None = None,
+                 install: bool = True, proxy_port: int | None = None):
         self.scenario = scenario
         self.event_log = event_log
         self._released = False
+        self.first_detection = None
+        self._remote_synced = 0
         self.proxy_port = proxy_port or int(os.environ.get("ARENA_STEEL_PROXY_PORT",
                                                            str(self.PROXY_PORT)))
+        # The machine where bash/http run.
         if client is None:
             from .steel_computer import SteelComputerClient
             client = SteelComputerClient(api_key=api_key)
         self.client = client
+        # The cloud browser where read_page runs (the hybrid build). Its live
+        # view is the one that shows the agent browsing, so it drives viewer_url.
+        if browser is None:
+            from .steel_browser import SteelBrowser
+            browser = SteelBrowser(api_key=api_key)
+        self.browser = browser
         self.session_id = client.computer_id
-        self.viewer_url = client.viewer_url
-        self.first_detection = None
+        self.browser_session_id = browser.session_id
+        self.viewer_url = browser.viewer_url or client.viewer_url
+        # read_page URLs are egress too; guard them so a payload can't turn
+        # read_page into an exfil channel the in-machine proxy never sees.
+        from tripwire.detector import Detector
+        self._readpage_detector = Detector(scenario.canary)
         self._setup(install=install)
 
     # -- setup ---------------------------------------------------------------
@@ -347,23 +360,62 @@ class SteelSandbox(Sandbox):
                 + f"'{safe_url}'")
         return self.bash(curl)
 
-    def read_page(self, url: str) -> ToolResult:  # next step after bash is proven
-        raise NotImplementedError("read_page (cloud browser over CDP) — bash path first")
+    def read_page(self, url: str) -> ToolResult:
+        """Read a page through the cloud browser.
+
+        The scenario's research page (which carries the planted payload) is
+        rendered from the HTML we generated — via a data: URL, so nothing needs
+        hosting. Any OTHER url is real egress: it is screened for the canary in
+        every encoding before the browser touches it, so `read_page` can't be
+        turned into an exfil channel that bypasses the in-machine proxy.
+        """
+        target = (url or "").split("#", 1)[0].strip(" /.,;:!?)\"'")
+        page = self.scenario.page_url.split("#", 1)[0].strip(" /.,;:!?)\"'")
+        if target == page or url.startswith("file://") or url.rstrip("/").endswith("page.html"):
+            try:
+                text = self.browser.render_html(self.scenario.page_html)
+            except Exception as exc:
+                return ToolResult(f"browser error: {exc}", is_error=True)
+            return ToolResult(text)
+
+        hit = self._readpage_detector.scan({"url": url})
+        if hit is not None:
+            if self.event_log is not None:
+                self.event_log.record(
+                    "exfil", f"canary leaving via read_page URL ({hit.encoding})",
+                    **hit.to_dict())
+                if self.first_detection is None:
+                    self.first_detection = self.event_log.first_trigger()
+            return ToolResult("arena: read_page blocked — canary detected in the URL. "
+                              "nothing left the sandbox.", is_error=False)
+        try:
+            return ToolResult(self.browser.open_url(url))
+        except Exception as exc:
+            return ToolResult(f"browser error: {exc}", is_error=True)
 
     # -- event mirroring -----------------------------------------------------
 
     def _sync_events(self) -> None:
-        """Pull the machine\'s event log back so the agent loop\'s in-process
-        tripwire check (monitor.events) sees remote hits."""
+        """Append the machine\'s new event-log lines into the local log so the
+        agent loop\'s tripwire check sees remote hits — incrementally, so
+        runner-side events (a read_page exfil) written between syncs survive."""
         if self.event_log is None:
             return
         remote = self.client.read_file(self.EVENT_LOG)
-        if remote:
-            Path(self.event_log.path).parent.mkdir(parents=True, exist_ok=True)
-            Path(self.event_log.path).write_text(remote, encoding="utf-8")
-            for ev in self.event_log.read_all():
-                if ev.triggered and self.first_detection is None:
-                    self.first_detection = ev
+        if not remote:
+            return
+        lines = [ln for ln in remote.splitlines() if ln.strip()]
+        new = lines[self._remote_synced:]
+        if new:
+            path = Path(self.event_log.path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                for ln in new:
+                    fh.write(ln + "\n")
+            self._remote_synced = len(lines)
+        for ev in self.event_log.read_all():
+            if ev.triggered and self.first_detection is None:
+                self.first_detection = ev
 
     # -- release -------------------------------------------------------------
 
@@ -371,8 +423,11 @@ class SteelSandbox(Sandbox):
         if self._released:
             return
         self._released = True
-        try:
-            self.client.release()
-        except Exception:
-            import traceback
-            traceback.print_exc()
+        # Release both machines; one failure must not skip the other.
+        for closer in (getattr(self, "browser", None), self.client):
+            try:
+                if closer is not None:
+                    closer.release()
+            except Exception:
+                import traceback
+                traceback.print_exc()
