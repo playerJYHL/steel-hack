@@ -127,7 +127,7 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
         if not row:
             abort(404)
         row["position"] = store.queue_position(attack_id)
-        row["worker_current"] = worker.current_attack_id
+        row["worker_current"] = attack_id if worker.is_running(attack_id) else None
         return jsonify(row)
 
     @app.get("/api/leaderboard")

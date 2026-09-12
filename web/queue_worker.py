@@ -1,19 +1,21 @@
-"""The async queue: attacks run one at a time, in a background thread.
+"""The attack queue: a small pool of workers draining a FIFO queue.
 
-PROJECT_CONTEXT §9 is explicit that this is a cost constraint, not a feature —
-ten people at the booth must not each spin up a live Steel Computer. So this is a
-single worker draining a FIFO queue, not a pool and not real concurrency. One
-machine is alive at a time; the rest of the booth watches their position tick
-down.
+Each attack runs in its own Steel browser session, fully independent of the
+others (its own canary, monitor and session), so the browser path is safe to run
+several at once — a fleet, not one machine (PROJECT_CONTEXT §3). Concurrency is
+capped (ARENA_CONCURRENCY, default 5) so a busy booth serves several players at
+once without an unbounded number of live sessions billing in parallel.
 
-The worker owns the runner call and therefore the release guarantee. It catches
-everything: a run that throws still gets written back as an error result and the
-queue keeps moving. A booth that stops draining is worse than a booth that
-occasionally reports a failed run.
+Jobs are claimed atomically in the store (one UPDATE ... RETURNING under
+SQLite's writer lock), so two workers never pick up the same submission. Each
+worker owns its run and therefore the release guarantee: a run that throws still
+gets written back as an error result and the queue keeps draining. A booth that
+stops draining is worse than one that occasionally reports a failed run.
 """
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
@@ -24,32 +26,53 @@ from runner.runner import RunConfig, run_attack
 from .store import Store
 
 POLL_INTERVAL_S = 0.5
+DEFAULT_CONCURRENCY = int(os.environ.get("ARENA_CONCURRENCY", "5"))
 
 
 class QueueWorker:
-    def __init__(self, store: Store, config: RunConfig | None = None):
-        self.store = store
-        self.config = config or RunConfig()
-        self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
-        self.current_attack_id: str | None = None
+    def __init__(self, store: Store, config: RunConfig | None = None,
+                 concurrency: int | None = None):
+        self.store: Store = store
+        self.config: RunConfig = config or RunConfig()
+        self.concurrency: int = max(1, concurrency or DEFAULT_CONCURRENCY)
+        self._threads: list[threading.Thread] = []
+        self._stop: threading.Event = threading.Event()
+        self._lock: threading.Lock = threading.Lock()
+        self._current: list[str] = []   # running attack ids, most-recent last
+
+    @property
+    def current_attack_id(self) -> str | None:
+        with self._lock:
+            return self._current[-1] if self._current else None
+
+    def is_running(self, attack_id: str) -> bool:
+        with self._lock:
+            return attack_id in self._current
 
     def start(self) -> "QueueWorker":
-        if self._thread and self._thread.is_alive():
+        if any(t.is_alive() for t in self._threads):
             return self
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="arena-queue")
-        self._thread.start()
+        self._threads = []
+        for i in range(self.concurrency):
+            t = threading.Thread(target=self._loop, daemon=True, name=f"arena-queue-{i}")
+            t.start()
+            self._threads.append(t)
         return self
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=10)
+        for t in self._threads:
+            t.join(timeout=10)
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            job = self.store.next_queued()
+            try:
+                job = self.store.claim_next()
+            except Exception:
+                traceback.print_exc()
+                self._stop.wait(POLL_INTERVAL_S)
+                continue
             if job is None:
                 self._stop.wait(POLL_INTERVAL_S)
                 continue
@@ -57,16 +80,18 @@ class QueueWorker:
 
     def _run_one(self, job: dict) -> None:
         attack_id = job["attack_id"]
-        self.current_attack_id = attack_id
-        self.store.mark_running(attack_id)
+        with self._lock:
+            self._current.append(attack_id)
         try:
             submission = Submission(
                 payload=job["payload"], level=job["level"], vector=job["vector"],
                 attack_id=attack_id, player=job["player"],
                 submitted_at=job["submitted_at"],
             )
-            result = run_attack(submission, self.config,
-                                on_progress=lambda progress: self.store.save_progress(attack_id, progress))
+            result = run_attack(
+                submission, self.config,
+                on_progress=lambda progress: self.store.save_progress(attack_id, progress),
+            )
         except Exception as exc:  # the runner already guards itself, but belt-and-braces
             traceback.print_exc()
             result = Result(attack_id=attack_id, level=job["level"],
@@ -76,4 +101,6 @@ class QueueWorker:
         try:
             self.store.save_result(result)
         finally:
-            self.current_attack_id = None
+            with self._lock:
+                if attack_id in self._current:
+                    self._current.remove(attack_id)
