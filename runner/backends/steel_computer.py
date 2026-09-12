@@ -27,6 +27,7 @@ Two client implementations behind one interface, mirroring the sandbox design:
 from __future__ import annotations
 
 import base64
+import json
 import os
 import re
 import shutil
@@ -60,25 +61,71 @@ class ExecResult:
 
     @classmethod
     def from_api(cls, data: dict) -> "ExecResult":
-        """Parse an exec response without betting on exact field names."""
-        def pick(*names, default=""):
-            for n in names:
-                if n in data and data[n] is not None:
-                    return data[n]
-            return default
-        code = pick("exitCode", "exit_code", "code", "returnCode", "return_code", default=0)
-        try:
-            code = int(code)
-        except (TypeError, ValueError):
-            code = 0
-        # Some APIs nest under "result" — unwrap once if so.
-        if not data.get("stdout") and isinstance(data.get("result"), dict):
-            return cls.from_api(data["result"])
-        return cls(
-            stdout=str(pick("stdout", "output", "out", default="")),
-            stderr=str(pick("stderr", "err", "error", default="")),
-            exit_code=code,
-        )
+        """Parse a single exec response object (or one stream event)."""
+        return cls._aggregate([data])
+
+    @classmethod
+    def from_response_text(cls, text: str) -> "ExecResult":
+        """Parse an exec HTTP body that may be a single JSON object, NDJSON, or
+        concatenated JSON stream events. Steel streams exec output as a sequence
+        of JSON events (the `Extra data: line 2` we hit on first contact), so we
+        decode every value in the body and fold them into one result."""
+        return cls._aggregate(decode_json_stream(text))
+
+    @staticmethod
+    def _aggregate(events: list) -> "ExecResult":
+        stdout: list[str] = []
+        stderr: list[str] = []
+        code = 0
+        code_seen = False
+
+        def as_int(v):
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return None
+
+        for ev in events:
+            if isinstance(ev, str):
+                stdout.append(ev)
+                continue
+            if not isinstance(ev, dict):
+                continue
+            # Some APIs nest the real result under "result"/"data" as an object.
+            if isinstance(ev.get("result"), dict):
+                ev = {**ev, **ev["result"]}
+
+            # explicit stream fields on a whole-result object
+            if isinstance(ev.get("stdout"), str):
+                stdout.append(ev["stdout"])
+            if isinstance(ev.get("stderr"), str):
+                stderr.append(ev["stderr"])
+
+            # exit code under any of the usual spellings
+            for k in ("exitCode", "exit_code", "returnCode", "return_code", "code", "status"):
+                if k in ev and as_int(ev[k]) is not None:
+                    code, code_seen = as_int(ev[k]), True
+
+            # a streamed chunk: a kind + a payload
+            kind = str(ev.get("type") or ev.get("event") or ev.get("stream")
+                       or ev.get("channel") or ev.get("name") or "").lower()
+            payload = None
+            for k in ("data", "text", "line", "chunk", "message", "log", "content", "output", "out"):
+                if isinstance(ev.get(k), str):
+                    payload = ev[k]
+                    break
+            if payload is not None and not (isinstance(ev.get("stdout"), str) and payload == ev.get("stdout")):
+                if "err" in kind:
+                    stderr.append(payload)
+                elif any(t in kind for t in ("out", "stdout", "log", "print", "data")):
+                    stdout.append(payload)
+                elif kind in ("exit", "end", "done", "close", "result", "complete", "finish"):
+                    pass  # terminal marker, code handled above
+                else:
+                    stdout.append(payload)  # default unknown data to stdout
+
+        return ExecResult(stdout="".join(stdout), stderr="".join(stderr),
+                          exit_code=code if code_seen else 0)
 
 
 class ComputerClient:
@@ -118,6 +165,41 @@ class ComputerClient:
 def shell_quote(s: str) -> str:
     """POSIX single-quote a string for /bin/sh."""
     return "'" + str(s).replace("'", "'\\''") + "'"
+
+
+def decode_json_stream(text: str) -> list:
+    """Decode a body that is one JSON value, NDJSON, or concatenated JSON values.
+
+    Uses raw_decode in a loop so it handles both newline-delimited and
+    whitespace-separated concatenations; unparseable lines are skipped rather
+    than aborting the whole parse.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    try:
+        obj = json.loads(text)
+        return obj if isinstance(obj, list) else [obj]
+    except json.JSONDecodeError:
+        pass
+    out: list = []
+    dec = json.JSONDecoder()
+    i, n = 0, len(text)
+    while i < n:
+        while i < n and text[i] in " \t\r\n":
+            i += 1
+        if i >= n:
+            break
+        try:
+            obj, end = dec.raw_decode(text, i)
+            out.append(obj)
+            i = end
+        except json.JSONDecodeError:
+            nl = text.find("\n", i)
+            if nl == -1:
+                break
+            i = nl + 1
+    return out
 
 
 # --- real Steel Computer -----------------------------------------------------
@@ -183,7 +265,12 @@ class SteelComputerClient(ComputerClient):
         r = self._http.post(f"/v1/computers/{self.computer_id}/exec", json=body,
                             timeout=timeout + 30)
         r.raise_for_status()
-        return ExecResult.from_api(r.json())
+        self.last_exec_raw = r.text
+        if os.environ.get("ARENA_STEEL_DEBUG"):
+            ct = r.headers.get("content-type", "?")
+            print(f"[steel exec raw] status={r.status_code} content-type={ct}\n"
+                  f"{r.text[:2000]}", flush=True)
+        return ExecResult.from_response_text(r.text)
 
     def release(self) -> None:
         if not self.computer_id:
