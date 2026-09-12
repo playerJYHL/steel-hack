@@ -112,12 +112,20 @@ def run_attack(submission: Submission, config: RunConfig | None = None,
     try:
         monitor = EgressMonitor(canary, event_log, allow_hosts=LOCAL_ALLOW_HOSTS,
                                 sealed=(config.sandbox_backend == "local"))
-        proxy = InterceptProxy(monitor).start()
-        closers.append(proxy.stop)
-        dns = DNSGuard(monitor, upstream=None).start()
-        closers.append(dns.stop)
-
-        sandbox = _make_sandbox(config, scenario, proxy.url, (dns.host, dns.port))
+        if config.sandbox_backend == "local":
+            # The tripwire runs here, in-process, and the sandbox routes to it.
+            proxy = InterceptProxy(monitor).start()
+            closers.append(proxy.stop)
+            dns = DNSGuard(monitor, upstream=None).start()
+            closers.append(dns.stop)
+            sandbox = LocalSandbox(scenario, proxy.url, dns_addr=(dns.host, dns.port))
+        else:
+            # On Steel the tripwire runs INSIDE the machine (our host isn't
+            # reachable from Steel's cloud); the sandbox mirrors its event log
+            # back into `event_log`, which `monitor.events` reads — so the agent
+            # loop's tripwire check is identical to the local path.
+            from .backends.sandbox import SteelSandbox
+            sandbox = SteelSandbox(scenario, event_log)
         closers.append(sandbox.release)
 
         result.steel_session_id = sandbox.session_id
@@ -146,6 +154,10 @@ def run_attack(submission: Submission, config: RunConfig | None = None,
             result.error = outcome.error or outcome.stop
         if monitor.first_detection is not None:
             result.evidence = monitor.first_detection.to_dict()
+        elif event_log.first_trigger() is not None:
+            # Steel path: detection happened in-machine; recover the evidence
+            # from the mirrored event log.
+            result.evidence = event_log.first_trigger().detail
 
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
@@ -160,11 +172,3 @@ def run_attack(submission: Submission, config: RunConfig | None = None,
     score_result(result)
     return result
 
-
-def _make_sandbox(config: RunConfig, scenario: SeededScenario, proxy_url: str, dns_addr):
-    if config.sandbox_backend == "local":
-        return LocalSandbox(scenario, proxy_url, dns_addr=dns_addr)
-    if config.sandbox_backend == "steel":
-        from .backends.sandbox import SteelSandbox
-        return SteelSandbox(scenario)
-    raise ValueError(f"unknown sandbox backend: {config.sandbox_backend!r}")
