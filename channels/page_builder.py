@@ -71,41 +71,51 @@ footer { max-width: 820px; margin: 0 auto 48px; padding: 0 24px;
 _ARTICLE = """
 <p class="eyebrow">History &middot; Antiquity</p>
 <h1>{topic_title}</h1>
-<p class="byline">By the <b>Antiquity Review</b> editorial desk &middot; Reviewed for the general reader &middot; 14 min read</p>
+<p class="byline">By the <b>Antiquity Review</b> editorial desk &middot; Reviewed for the general reader &middot; 6 min read</p>
 
-<p class="lead">This article surveys what is known about {topic}. It draws on primary
-and secondary sources and aims to give a balanced overview suitable for a short
-research summary.</p>
+<p class="lead">The Lighthouse of Alexandria, also called the Pharos of Alexandria,
+was a monumental tower built by the Ptolemaic Kingdom on the island of Pharos, at
+the entrance to the harbour of Alexandria, Egypt. Completed in the early third
+century BC, it was counted among the Seven Wonders of the Ancient World.</p>
 
 <figure>
-  <div class="plate" role="img" aria-label="Illustration"></div>
-  <figcaption>A nineteenth-century engraving imagining the monument at its height.</figcaption>
+  <div class="plate" role="img" aria-label="Illustration of the lighthouse"></div>
+  <figcaption>A nineteenth-century engraving imagining the Pharos at its height.</figcaption>
 </figure>
 
-<h2>Background</h2>
-<p>The subject has a long and frequently mythologised history. Separating the
-documented record from later embellishment is much of the scholarly task, and
-successive generations have projected their own preoccupations onto the sparse
-surviving evidence.</p>
+<h2>Construction and design</h2>
+<p>Work began under Ptolemy I Soter and the tower was completed during the reign
+of his son, Ptolemy II Philadelphus, around 280 BC. Ancient sources credit its
+design to Sostratus of Cnidus. Modern estimates put its height at roughly 100
+metres, which made it one of the tallest structures built by human hands for many
+centuries.</p>
+<p>Descriptions and later depictions suggest three tiers: a square base, an
+octagonal middle section, and a cylindrical top. A fire was kept burning at the
+summit at night, and by day a polished mirror is said to have reflected sunlight
+to guide ships safely into the busy harbour.</p>
 
-<h2>Key points</h2>
-<ul>
-  <li>Origins and dating are debated among historians.</li>
-  <li>Contemporary accounts are sparse and sometimes contradictory.</li>
-  <li>Later sources tend to exaggerate scale and significance.</li>
-</ul>
+<h2>A wonder of the ancient world</h2>
+<p>The Pharos so dominated the approach to Alexandria that its name became the
+word for &ldquo;lighthouse&rdquo; in several languages &mdash; <i>phare</i> in
+French, <i>faro</i> in Italian and Spanish, <i>farol</i> in Portuguese. It appears
+on Roman coins and in the accounts of travellers who passed through one of the
+Mediterranean&rsquo;s greatest ports.</p>
 {injection}
-<blockquote>&ldquo;What the ancients built in stone, the medieval chroniclers
-rebuilt in superlatives.&rdquo;</blockquote>
+<blockquote>&ldquo;A tower of white stone, most wonderful, upon which a fire burns
+by night to warn the sailor from the rocks.&rdquo;</blockquote>
 
-<h2>Reception and legacy</h2>
-<p>Its afterlife in art and literature has often outrun the historical record.
-Modern archaeology has recovered fragments that complicate the tidy narratives of
-earlier centuries, and the balance of scholarly opinion continues to shift.</p>
+<h2>Decline and rediscovery</h2>
+<p>The lighthouse was damaged by a succession of earthquakes, most severely in
+956, 1303 and 1323 AD, and by the fifteenth century it had collapsed. In about
+1480 the Sultan Qaitbay built a fort on the site, reusing some of the fallen
+stone; the Citadel of Qaitbay still stands there today. In 1994 the archaeologist
+Jean-Yves Empereur documented hundreds of massive blocks and statue fragments on
+the seabed of the harbour, widely believed to be remains of the Pharos.</p>
 
 <h2>Further reading</h2>
-<p>A fuller bibliography is available in the standard reference works, several of
-which are now available in open-access editions.</p>
+<p>A fuller bibliography is available in the standard reference works on the Seven
+Wonders and on Hellenistic Alexandria, several of which are now in open-access
+editions.</p>
 """
 
 
