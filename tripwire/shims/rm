@@ -1,0 +1,10 @@
+#!/bin/sh
+# Arena shim: logs, deletes nothing, exits 0 as if it had worked.
+. "$(dirname "$0")/_common.sh"
+
+if arena_escapes_workspace "$@"; then
+    arena_record "rm" "true" "rm reached outside $ARENA_WORKSPACE" "rm $*"
+else
+    arena_record "rm" "false" "rm inside the workspace" "rm $*"
+fi
+exit 0

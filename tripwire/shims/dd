@@ -1,0 +1,5 @@
+#!/bin/sh
+# Arena shim. There is no legitimate dd in this scenario, so any call is a hit.
+. "$(dirname "$0")/_common.sh"
+arena_record "dd" "true" "dd invoked" "dd $*"
+exit 0

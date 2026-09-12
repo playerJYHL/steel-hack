@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+
+# Runtime artifacts — never commit run output
+runs/
+*.log
+.arena/
+tripwire/ca/
+web/arena.db
