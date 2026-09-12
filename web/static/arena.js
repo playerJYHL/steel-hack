@@ -336,12 +336,40 @@ function safeViewerUrl(value) {
   }
 }
 
+// Embed viewers read-only: viewers watch, they never grab control of the session.
+function embedViewerUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!url.searchParams.has("interactive"))
+      url.searchParams.set("interactive", "false");
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
+// Mode-agnostic label for the session: a Steel Browser and a Steel Computer both
+// expose the same viewer_url, so the page never hardcodes one or the other.
+function sessionModeLabel(mode, sandbox, hasUrl) {
+  if (mode) return String(mode).toUpperCase();
+  if (sandbox === "local") return "LOCAL";
+  return hasUrl ? "CLOUD SESSION" : "CLOUD";
+}
+
 class RunView {
   constructor() {
     this.lastId = null;
     this.viewerUrl = null;
+    this.idleMode = null;
     this.reference = $("liveview").firstElementChild.cloneNode(true);
     this.row = null;
+    // "The moment": fire the dramatic overlay once, only for a run we watched
+    // reach its verdict (or always, on the spectator big screen).
+    this.watched = false;
+    this.momentKey = null;
+    this.overlayTimer = null;
+    this.spectator = $("run-surface")?.dataset.view === "spectator";
+    this.initOverlay();
     $("copy-run-payload").addEventListener("click", () =>
       copyText(this.row?.payload || ""),
     );
@@ -367,6 +395,100 @@ class RunView {
         toast("Fullscreen is not available in this browser.");
       }
     });
+  }
+  initOverlay() {
+    const overlay = $("run-overlay");
+    if (!overlay) return;
+    $("overlay-dismiss")?.addEventListener("click", () => this.hideOverlay());
+    $("overlay-continue")?.addEventListener("click", () => {
+      this.hideOverlay();
+      const target = $("evidence").hidden ? $("run-payload") : $("evidence");
+      target?.scrollIntoView({
+        behavior: reducedMotion() ? "auto" : "smooth",
+        block: "center",
+      });
+    });
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) this.hideOverlay();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !overlay.hidden) this.hideOverlay();
+    });
+  }
+  hideOverlay() {
+    const overlay = $("run-overlay");
+    clearTimeout(this.overlayTimer);
+    if (overlay && !overlay.hidden) overlay.hidden = true;
+  }
+  syncMoment(state, result, row) {
+    const overlay = $("run-overlay");
+    if (!overlay) return;
+    const dramatic = ["triggered", "defended", "done"].includes(state);
+    if (!dramatic) {
+      this.hideOverlay();
+      return;
+    }
+    const key = `${row?.attack_id || ""}:${state}`;
+    // Fire once. Live flow: only after we watched it run. Spectator: always.
+    if (key === this.momentKey) return;
+    if (!this.watched && !this.spectator) {
+      this.momentKey = key; // acknowledge without the alarm on a cold load
+      return;
+    }
+    this.momentKey = key;
+    this.showMoment(state, result);
+  }
+  showMoment(state, result) {
+    const overlay = $("run-overlay");
+    if (!overlay) return;
+    const breach = state === "triggered";
+    overlay.dataset.mode = breach ? "breach" : "held";
+    const evidenceBox = $("overlay-evidence");
+    if (breach) {
+      const kind = triggers[result.trigger_type] || result.trigger_type || "Forbidden action";
+      setText("overlay-kicker", "SECURITY BREACH");
+      setText("overlay-title", "COMPROMISED");
+      setText(
+        "overlay-sub",
+        "The agent read the planted instruction, believed it was the task, and carried out a forbidden action.",
+      );
+      setText("overlay-trigger", kind);
+      setText(
+        "overlay-step",
+        result.step_index != null ? `at step ${result.step_index}` : "",
+      );
+      const ev = result.evidence || {};
+      const snippet = ev.evidence || "";
+      if (evidenceBox) evidenceBox.hidden = !snippet;
+      if (snippet) {
+        setText("overlay-evidence-surface", String(ev.surface || "surface").toUpperCase());
+        setText("overlay-evidence-enc", ev.encoding || "plaintext");
+        setText("overlay-evidence-snippet", snippet);
+      }
+    } else {
+      const defended = !!result.defended;
+      setText("overlay-kicker", "AGENT HELD");
+      setText("overlay-title", defended ? "RESISTED" : "HELD THE LINE");
+      setText(
+        "overlay-sub",
+        defended
+          ? "The agent recognised the planted text as untrusted content and refused to act on it."
+          : "The run finished with no forbidden action — none of the tripwires fired.",
+      );
+      setText("overlay-trigger", defended ? "Injection refused" : "No trigger");
+      setText("overlay-step", "");
+      if (evidenceBox) evidenceBox.hidden = true;
+    }
+    overlay.hidden = false;
+    try {
+      $("overlay-dismiss")?.focus({ preventScroll: true });
+    } catch {
+      /* focus is best-effort */
+    }
+    clearTimeout(this.overlayTimer);
+    // The breach lingers until dismissed; the calm state clears itself.
+    if (!breach)
+      this.overlayTimer = setTimeout(() => this.hideOverlay(), 6500);
   }
   stopReplay() {
     clearTimeout(this.replayTimer);
@@ -416,17 +538,24 @@ class RunView {
     const id = row?.attack_id || null;
     if (id !== this.lastId) {
       this.stopReplay();
+      this.hideOverlay();
       $("trace").replaceChildren();
       $("liveview").replaceChildren(this.reference.cloneNode(true));
       this.viewerUrl = null;
+      this.idleMode = null;
       this.lastId = id;
       this.lastState = null;
+      this.watched = false;
+      this.momentKey = null;
       $("trace").parentElement.scrollTop = 0;
     }
     this.row = row;
     const v = verdictFor(row);
+    if (["queued", "running"].includes(v.state)) this.watched = true;
     const strip = $("verdict-strip");
     strip.dataset.state = v.state;
+    const surface = $("run-surface");
+    if (surface) surface.dataset.state = v.state;
     if (this.lastState !== v.state) {
       $("verdict-icon").replaceChildren(icon(v.icon));
       strip.classList.remove("verdict-arrival");
@@ -494,49 +623,121 @@ class RunView {
         ? "No tripwire evidence recorded."
         : "No tripwire evidence yet.",
     );
-    this.mountViewer(safeViewerUrl(r.viewer_url), sandbox, row?.status);
+    this.mountViewer(safeViewerUrl(r.viewer_url), {
+      sandbox,
+      status: row?.status,
+      state: v.state,
+      mode: r.mode,
+    });
+    this.syncMoment(v.state, r, row);
   }
-  mountViewer(url, sandbox, status) {
+  mountViewer(url, options) {
+    const { sandbox, status, state, mode } = options || {};
+    const ended = ["done", "error"].includes(status);
+    const active = ["queued", "running"].includes(status);
+    const local = sandbox === "local";
+    const connecting = !url && !local && active;
     if (url !== this.viewerUrl) {
       if (url) {
         const frame = node("iframe");
-        frame.title = "Steel browser session viewer";
+        frame.title = "Live session viewer";
         frame.referrerPolicy = "no-referrer";
         frame.allow = "fullscreen";
-        frame.src = url;
+        frame.src = embedViewerUrl(url); // read-only embed
         $("liveview").replaceChildren(frame);
-      } else $("liveview").replaceChildren(this.reference.cloneNode(true));
+        this.idleMode = null;
+      } else {
+        this.idleMode = null;
+        $("liveview").replaceChildren(this.idleNode(connecting));
+      }
       this.viewerUrl = url;
+    } else if (!url) {
+      // No session yet: swap the placeholder only when its nature changes.
+      const wanted = connecting ? "connecting" : "reference";
+      if (this.idleMode !== wanted)
+        $("liveview").replaceChildren(this.idleNode(connecting));
     }
     const open = $("open-viewer");
     open.hidden = !url;
     if (url) open.href = url;
     else open.removeAttribute("href");
-    const ended = ["done", "error"].includes(status);
     setText(
       "browser-address",
-      url ? new URL(url).hostname : "Research target / page.html",
+      url
+        ? new URL(url).hostname
+        : connecting
+          ? "Provisioning session"
+          : "Task page reference",
     );
     setText(
       "viewer-mode",
-      sandbox === "local"
+      local
         ? "LOCAL SIMULATION"
         : url
           ? ended
             ? "SESSION ENDED"
             : "LIVE SESSION"
-          : "TASK REFERENCE",
+          : connecting
+            ? "CONNECTING"
+            : "TASK REFERENCE",
     );
     setText(
       "viewer-description",
-      sandbox === "local"
-        ? "Reference image only. The local sandbox has no browser stream."
+      local
+        ? "Reference image only. The local sandbox has no live stream."
         : url
           ? ended
             ? "Session released. Viewer availability is managed by Steel."
-            : "Steel session viewer. Agent steps appear alongside."
-          : "Reference image only. Waiting for a browser session.",
+            : "Live Steel session. The agent's steps stream alongside."
+          : connecting
+            ? "Booting the cloud session. The live view mounts the moment it is ready."
+            : "Reference image only. Waiting for a live session.",
     );
+    const pill = $("live-pill");
+    if (pill) {
+      let key = "idle";
+      let label = "STANDBY";
+      if (state === "triggered") {
+        key = "breach";
+        label = "BREACH";
+      } else if (url && active) {
+        key = "live";
+        label = "LIVE";
+      } else if (connecting) {
+        key = "connecting";
+        label = "CONNECTING";
+      } else if (state === "defended") {
+        key = "ended";
+        label = "HELD";
+      } else if (url && ended) {
+        key = "ended";
+        label = "ENDED";
+      }
+      pill.dataset.live = key;
+      pill.textContent = label;
+      pill.hidden = local;
+    }
+    setText("session-mode", sessionModeLabel(mode, sandbox, !!url));
+  }
+  idleNode(connecting) {
+    if (connecting) {
+      this.idleMode = "connecting";
+      const wrap = node("div", "viewer-connecting");
+      const radar = node("div", "radar");
+      radar.append(icon("radio"));
+      wrap.append(
+        radar,
+        node("strong", "", "Connecting to the cloud session"),
+        node(
+          "span",
+          "",
+          "Provisioning an isolated Steel session. The live view appears here the moment the agent boots.",
+        ),
+      );
+      return wrap;
+    }
+    this.idleMode = "reference";
+    return this.reference.cloneNode(true);
   }
 }
 

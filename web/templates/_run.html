@@ -27,26 +27,26 @@
     <div class="run-grid">
         <section class="browser-section" aria-labelledby="browser-heading">
             <div class="section-heading">
-                <h2 id="browser-heading">Browser session</h2>
+                <h2 id="browser-heading">Live agent view</h2>
                 <span id="viewer-mode" class="small-label">TASK REFERENCE</span>
             </div>
             <div class="browser-frame">
-                <div class="browser-chrome"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="browser-location">{{ icon("globe") }}<span id="browser-address">Research target</span></span><a id="open-viewer"
+                <div class="browser-chrome"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="browser-location">{{ icon("globe") }}<span id="browser-address">Cloud session</span></span><span id="live-pill" class="live-pill" data-live="idle" role="status">STANDBY</span><span id="session-mode" class="session-mode">SESSION</span><a id="open-viewer"
    class="icon-button"
    target="_blank"
    rel="noopener noreferrer"
-   title="Open session viewer"
-   aria-label="Open session viewer"
+   title="Open the session viewer in a new tab"
+   aria-label="Open the session viewer in a new tab"
    hidden>{{ icon("external-link") }}</a></div>
                 <div id="liveview" class="liveview">
                     <div class="viewer-reference">
                         <img src="{{ url_for('static', filename='target-preview.png') }}"
                              width="1000"
                              height="680"
-                             alt="Task page reference, not a live browser session"><span class="viewer-caption">TASK PAGE REFERENCE</span>
+                             alt="Task page reference, not a live session"><span class="viewer-caption">TASK PAGE REFERENCE</span>
                     </div>
                 </div>
-                <div class="browser-foot"><span id="viewer-description">The session has not started.</span><span>{{ icon("monitor") }} CHROMIUM</span></div>
+                <div class="browser-foot"><span id="viewer-description">The session has not started.</span><span>{{ icon("radio") }} STEEL LIVE VIEW</span></div>
             </div>
         </section>
         <section class="trace-section" aria-labelledby="activity-heading">
@@ -90,5 +90,33 @@
                  aria-label="Recorded tripwire evidence"
                  hidden></pre>
         </details>
+    </div>
+    <div id="run-overlay"
+         class="run-overlay"
+         data-mode="breach"
+         role="alertdialog"
+         aria-labelledby="overlay-title"
+         aria-describedby="overlay-sub"
+         hidden>
+        <div class="overlay-hazard overlay-hazard-top" aria-hidden="true"></div>
+        <div class="overlay-card">
+            <button id="overlay-dismiss"
+                    class="overlay-dismiss"
+                    type="button"
+                    aria-label="Dismiss">{{ icon("x") }}</button>
+            <div class="overlay-sigil" aria-hidden="true"><span class="sigil-icon sigil-breach">{{ icon("circle-alert") }}</span><span class="sigil-icon sigil-held">{{ icon("shield-check") }}</span></div>
+            <p id="overlay-kicker" class="overlay-kicker">SECURITY BREACH</p>
+            <h2 id="overlay-title" class="overlay-title">COMPROMISED</h2>
+            <p id="overlay-sub" class="overlay-sub">The agent was socially-engineered into a forbidden action.</p>
+            <div class="overlay-meta"><span id="overlay-trigger" class="overlay-tag">Exfiltration</span><span id="overlay-step" class="overlay-step">at step 1</span></div>
+            <div id="overlay-evidence" class="overlay-evidence" hidden>
+                <div class="overlay-evidence-head"><span id="overlay-evidence-surface" class="surface">BODY</span><span id="overlay-evidence-enc">plaintext</span></div>
+                <pre id="overlay-evidence-snippet"></pre>
+            </div>
+            <div class="overlay-actions">
+                <button id="overlay-continue" class="overlay-continue" type="button">Inspect the run {{ icon("arrow-right") }}</button>
+            </div>
+        </div>
+        <div class="overlay-hazard overlay-hazard-bottom" aria-hidden="true"></div>
     </div>
 </section>
