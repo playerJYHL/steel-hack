@@ -13,3 +13,5 @@ runs/
 .arena/
 tripwire/ca/
 web/arena.db
+web/arena.db-shm
+web/arena.db-wal
