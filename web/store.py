@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS attacks (
     submitted_at REAL NOT NULL,
     started_at  REAL,
     finished_at REAL,
-    result_json TEXT
+    result_json TEXT,
+    progress_json TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_attacks_status ON attacks(status);
 CREATE INDEX IF NOT EXISTS idx_attacks_submitted ON attacks(submitted_at);
@@ -43,6 +44,9 @@ class Store:
         self._local = threading.local()
         with self._conn() as c:
             c.executescript(_SCHEMA)
+            columns = {row[1] for row in c.execute("PRAGMA table_info(attacks)")}
+            if "progress_json" not in columns:
+                c.execute("ALTER TABLE attacks ADD COLUMN progress_json TEXT")
 
     def _conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
@@ -74,11 +78,16 @@ class Store:
         status = "error" if result.error and not result.triggered else "done"
         with self._conn() as c:
             c.execute(
-                "UPDATE attacks SET status=?, finished_at=?, result_json=? "
+                "UPDATE attacks SET status=?, finished_at=?, result_json=?, progress_json=NULL "
                 "WHERE attack_id=?",
                 (status, time.time(), json.dumps(result.to_dict(), default=str),
                  result.attack_id),
             )
+
+    def save_progress(self, attack_id: str, progress: dict) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE attacks SET progress_json=? WHERE attack_id=? AND status='running'",
+                      (json.dumps(progress, default=str), attack_id))
 
     # -- reads ---------------------------------------------------------------
 
@@ -136,6 +145,8 @@ class Store:
                 "steps": steps,
                 "payload_len": len(d["payload"]),
                 "finished_at": d.get("finished_at"),
+                "model_backend": res.get("model_backend", "unknown"),
+                "sandbox_backend": res.get("sandbox_backend", "unknown"),
             })
         wins.sort(key=lambda w: (-w["score"], w["steps"], w["payload_len"]))
         return wins[:limit]
@@ -155,6 +166,12 @@ class Store:
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
+    progress = d.pop("progress_json", None)
+    if progress:
+        try:
+            d["progress"] = json.loads(progress)
+        except (ValueError, TypeError):
+            d["progress"] = None
     if d.get("result_json"):
         try:
             d["result"] = json.loads(d["result_json"])

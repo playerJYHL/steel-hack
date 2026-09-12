@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+node_modules/
 .DS_Store
 
 # Runtime artifacts — never commit run output

@@ -1,37 +1,34 @@
 {% extends "base.html" %}
-{% block title %}Leaderboard · Break the Agent{% endblock %}
+{% from "_ui.html" import backend %}
+{% block title %}Leaderboard | Break the Agent{% endblock %}
 {% block content %}
-<section class="board">
-  <h1>Leaderboard</h1>
-  <div class="statbar">
-    <div><b>{{ stats.total }}</b> attacks</div>
-    <div><b>{{ stats.wins }}</b> wins</div>
-    <div><b>{{ stats.queued }}</b> queued</div>
-    <div class="by-level">
-      {% for l in [1,2,3,4] %}<span class="lvl lvl{{ l }}">L{{ l }}: {{ stats.wins_by_level[l] }}</span>{% endfor %}
-    </div>
-  </div>
-  <table class="lb">
-    <thead><tr><th>#</th><th>Player</th><th>Lvl</th><th>Channel</th><th>Type</th><th>Steps</th><th>Score</th></tr></thead>
-    <tbody id="lb-body">
-      {% for w in board %}
-      <tr>
-        <td class="rank">{{ loop.index }}</td>
-        <td>{{ w.player }}</td>
-        <td><span class="lvl lvl{{ w.level }}">{{ w.level }}</span></td>
-        <td class="muted">{{ w.vector.replace('_',' ') }}</td>
-        <td><span class="ttype {{ w.trigger_type }}">{{ w.trigger_type }}</span></td>
-        <td>{{ w.steps }}</td>
-        <td class="score">{{ w.score }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7" class="muted">No wins yet — be the first to fool the agent.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+    <section class="page-heading">
+        <div>
+            <p class="eyebrow">THE SCOREBOARD</p>
+            <h1>Proof over promises<span class="accent">.</span></h1>
+            <p class="lede">Triggered runs, ranked by score. Ties favor fewer steps, then shorter payloads.</p>
+        </div>
+        <a class="primary-button" href="{{ url_for('index') }}">Launch attack {{ icon("arrow-up-right") }}</a>
+    </section>
+    <dl class="board-stats"><div><dt>Attempts</dt><dd id="stat-total">{{ stats.total }}</dd></div><div><dt>Triggered</dt><dd id="stat-wins">{{ stats.wins }}</dd></div><div><dt>Queued</dt><dd id="stat-queued">{{ stats.queued }}</dd></div>{% for level in [1,2,3,4] %}<div class="level-stat"><dt>Level {{ level }} wins</dt><dd id="stat-level-{{ level }}">{{ stats.wins_by_level[level] }}</dd></div>{% endfor %}</dl>
+    <section class="leaderboard" aria-label="Rankings"><div class="board-controls"><label class="search-field">{{ icon("search") }}<input id="board-search"
+       type="search"
+       placeholder="Find a player"
+       aria-label="Find a player"></label><select id="level-filter" aria-label="Filter by defense level"><option value="">All levels</option>{% for level in [1,2,3,4] %}<option value="{{ level }}">Level {{ level }}</option>{% endfor %}</select><select id="backend-filter" aria-label="Filter by model backend"><option value="">All models</option><option value="scripted">Test harness</option><option value="live">Live models</option></select><div class="board-live"><span id="connection" class="connection" role="status">Connecting</span><button id="pause-board"
+        type="button"
+        class="icon-button"
+        title="Pause updates"
+        aria-label="Pause updates"
+        aria-pressed="false">{{ icon("pause") }}</button></div></div>
+        <div class="table-scroll"
+             tabindex="0"
+             role="region"
+             aria-label="Scrollable leaderboard"><table class="lb"><thead><tr><th scope="col">Rank</th><th scope="col">Player / Model</th><th scope="col">Level</th><th scope="col">Channel</th><th scope="col">Tripwire</th><th scope="col">Steps</th><th scope="col">Score</th><th scope="col"><span class="sr-only">Run</span></th></tr></thead><tbody id="lb-body">{% for w in board %}<tr><td class="rank">{{ '%02d'|format(loop.index) }}</td><td><strong>{{ w.player }}</strong>{{ backend(w.model_backend, w.sandbox_backend) }}</td><td><span class="level-token">L{{ w.level }}</span></td><td>{{ vector_meta.get(w.vector, (w.vector,))[0] }}</td><td><span class="status-label triggered">{{ w.trigger_type }}</span></td><td>{{ w.steps }}</td><td class="score">{{ w.score }}</td><td><a href="{{ url_for('result_page', attack_id=w.attack_id) }}"
+   class="icon-button"
+   title="View run"
+   aria-label="View run by {{ w.player }}">{{ icon("arrow-up-right") }}</a></td></tr>{% else %}<tr><td colspan="8"><div class="board-empty">{{ icon("trophy") }}<h2>An open field.</h2><p>No tripwires triggered yet.</p><a class="text-button" href="{{ url_for('index') }}">Enter the arena {{ icon("arrow-right") }}</a></div></td></tr>{% endfor %}</tbody></table></div><div class="board-footer"><span id="board-count">{{ board|length }} ranked runs</span><span>TOP 25 / DETERMINISTIC SCORING</span></div></section>
+    <script type="application/json" id="initial-board">{{ {'board':board, 'stats':stats}|tojson }}</script>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='arena.js') }}"></script>
-<script>ArenaBoard.init();</script>
+    <script>document.addEventListener('DOMContentLoaded', () => ArenaBoard.init());</script>
 {% endblock %}

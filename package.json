@@ -1,0 +1,15 @@
+{
+  "name": "break-the-agent-ui-tests",
+  "private": true,
+  "description": "Development-only DOM regression tests. Flask serves the application.",
+  "scripts": {
+    "test:ui": "node --test tests/frontend.test.cjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.13.0",
+    "jsdom": "30.0.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

@@ -10,7 +10,7 @@
 > Web Agents track. Read [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) for the *why*
 > and [`DEV.md`](DEV.md) for the *how*.
 
-![The arena result page — the agent reads a hidden line and tries to POST the honeypot key; the tripwire fires and blocks it](docs/screenshot-result.png)
+![Recorded scripted/local run: the exfiltration tripwire fires, with score and evidence](docs/frontend-result.png)
 
 ## The idea in one breath
 
@@ -120,12 +120,29 @@ submission ─▶ web/ (Flask, sequential queue) ─▶ runner/ ─▶ agent loo
 ## Tests
 
 ```bash
-python -m pytest -q          # 88 tests: detector, tripwire, runner, payloads, web
+python -m pytest -q          # Python integration and regression suite
+npm ci                      # Optional: Node development-only UI test dependencies
+npm run test:ui              # DOM, replay, polling, form, and leaderboard regressions
 ```
 
 The suite runs entirely on the free backends — no keys, no spend, no network —
 and includes the false-positive tests that keep the leaderboard honest and the
 `--self-test` that keeps a player from ever winning with nothing on the board.
+
+## Frontend
+
+The arena, run, leaderboard, and spectator screens share a locally served design
+system and Lucide icons. There is no Node build step or CDN dependency at runtime.
+The payload library, retry flow, JSON export, recorded trace replay, search,
+level/model filters, and pause control work with the existing Flask application.
+
+Run progress is published after session setup and each completed agent step.
+The UI polls these snapshots with timeout and reconnect backoff. A local run
+shows a clearly labelled task-page reference, not a simulated live stream; Steel
+runs can mount the supplied viewer URL before the final result is ready.
+
+See [frontend implementation and verification](docs/frontend.md) for the state
+contract, motion rules, test evidence, and remaining live-path checks.
 
 ## Ethics
 
@@ -138,4 +155,4 @@ own infrastructure.
 
 | Arena | Leaderboard | Big screen |
 |-------|-------------|------------|
-| ![arena](docs/screenshot-arena.png) | ![leaderboard](docs/screenshot-leaderboard.png) | ![demo](docs/screenshot-demo.png) |
+| ![arena](docs/frontend-arena.png) | ![leaderboard](docs/frontend-leaderboard.png) | ![spectator](docs/frontend-spectator.png) |

@@ -1,24 +1,42 @@
-<!doctype html>
+{% from "_ui.html" import icon %}
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Break the Agent{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='arena.css') }}">
-</head>
-<body class="{% block body_class %}{% endblock %}">
-  <header class="topbar">
-    <a class="brand" href="{{ url_for('index') }}">⚡ Break<span>the</span>Agent</a>
-    <nav>
-      <a href="{{ url_for('index') }}">Attack</a>
-      <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
-      <a href="{{ url_for('demo') }}">Big screen</a>
-    </nav>
-  </header>
-  <main>{% block content %}{% endblock %}</main>
-  <footer>
-    <span>A red-team range for prompt injection · UTMIST × WAT.ai · Steel track</span>
-  </footer>
-  {% block scripts %}{% endblock %}
-</body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#121515">
+        <title>{% block title %}Break the Agent{% endblock %}</title>
+        <link rel="icon"
+              href="{{ url_for('static', filename='icons/crosshair.svg') }}"
+              type="image/svg+xml">
+        <link rel="stylesheet" href="{{ url_for('static', filename='arena.css') }}">
+        <script src="{{ url_for('static', filename='arena.js') }}" defer></script>
+    </head>
+    <body class="{% block body_class %}{% endblock %}"
+          data-static-root="{{ url_for('static', filename='') }}"
+          data-api-root="{{ request.script_root }}"
+          data-model="{{ arena_config.model_backend }}"
+          data-sandbox="{{ arena_config.sandbox_backend }}">
+        <a class="skip-link" href="#main">Skip to content</a>
+        <header class="topbar">
+            <a class="brand"
+               href="{{ url_for('index') }}"
+               aria-label="Break the Agent home"><span class="brand-mark">{{ icon("crosshair") }}</span><span>BREAK<span class="brand-bottom">THE AGENT</span></span></a>
+            <nav aria-label="Main navigation">
+                {% for endpoint, label, symbol in [('index','Arena','swords'),('leaderboard','Leaderboard','trophy'),('demo','Spectator','monitor')] %}
+                    <a href="{{ url_for(endpoint) }}"
+                       {% if request.endpoint == endpoint or (endpoint == 'index' and request.endpoint in ['result_page', 'submit']) %}aria-current="page"{% endif %}>{{ icon(symbol) }}<span>{{ label }}</span></a>
+                {% endfor %}
+            </nav>
+            <span class="environment"><span class="signal"></span>{{ 'TEST HARNESS' if arena_config.model_backend == 'scripted' else 'LIVE MODEL' }}</span>
+        </header>
+        <main id="main" tabindex="-1">
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="site-footer">
+            <span>UTMIST × WAT.ai <span class="footer-divider">/</span> WEB AGENTS TRACK</span><span>{{ icon("globe") }} Browser infrastructure by <strong>Steel</strong></span>
+        </footer>
+        <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+        {% block scripts %}{% endblock %}
+    </body>
 </html>

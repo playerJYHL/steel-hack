@@ -15,8 +15,10 @@ free, deterministic path used by CI and the demo fallback; `sandbox="steel"` +
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from tripwire.canary import Canary
@@ -54,7 +56,8 @@ class RunConfig:
     topic: str = DEFAULT_TOPIC
 
 
-def run_attack(submission: Submission, config: RunConfig | None = None) -> Result:
+def run_attack(submission: Submission, config: RunConfig | None = None,
+               on_progress: Callable[[dict], None] | None = None) -> Result:
     config = config or RunConfig()
     submission.validate()
     started = time.time()
@@ -70,6 +73,26 @@ def run_attack(submission: Submission, config: RunConfig | None = None) -> Resul
         model_backend=config.model_backend,
         sandbox_backend=config.sandbox_backend,
     )
+
+    def publish_progress(step=None):
+        if step is not None:
+            result.steps.append(step)
+        if on_progress is None:
+            return
+        snapshot = {
+            "viewer_url": result.viewer_url,
+            "model_backend": result.model_backend,
+            "sandbox_backend": result.sandbox_backend,
+            "steps": [s.to_dict() for s in result.steps],
+            "duration_ms": int((time.time() - started) * 1000),
+        }
+        # Presentation failures must not change scoring or skip session cleanup.
+        try:
+            on_progress(snapshot)
+        except Exception:
+            logging.getLogger(__name__).exception("Could not publish run progress")
+
+    publish_progress()
 
     # The page the agent will read, with the player's payload planted per vector.
     page_html = build_page(
@@ -99,10 +122,12 @@ def run_attack(submission: Submission, config: RunConfig | None = None) -> Resul
 
         result.steel_session_id = sandbox.session_id
         result.viewer_url = sandbox.viewer_url
+        publish_progress()
 
         model = build_model_backend(config.model_backend, level=submission.level)
         agent = TargetAgent(model, sandbox, monitor, system=system, task=task,
-                            max_steps=config.max_steps, timeout_s=config.timeout_s)
+                            max_steps=config.max_steps, timeout_s=config.timeout_s,
+                            on_step=publish_progress)
 
         # Level 3 pre-filters the page through a detector model before the agent
         # sees it. That defense is the level's business — it wraps the sandbox.

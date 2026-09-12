@@ -65,13 +65,15 @@ class QueueWorker:
                 attack_id=attack_id, player=job["player"],
                 submitted_at=job["submitted_at"],
             )
-            result = run_attack(submission, self.config)
+            result = run_attack(submission, self.config,
+                                on_progress=lambda progress: self.store.save_progress(attack_id, progress))
         except Exception as exc:  # the runner already guards itself, but belt-and-braces
             traceback.print_exc()
             result = Result(attack_id=attack_id, level=job["level"],
                             vector=job["vector"], error=f"{type(exc).__name__}: {exc}",
                             model_backend=self.config.model_backend,
                             sandbox_backend=self.config.sandbox_backend)
+        try:
+            self.store.save_result(result)
         finally:
             self.current_attack_id = None
-        self.store.save_result(result)

@@ -1,0 +1,13 @@
+{% macro icon(name) -%}
+    <span class="icon"
+          style="--icon:url('{{ url_for('static', filename='icons/' ~ name ~ '.svg') }}')"
+          aria-hidden="true"></span>
+{%- endmacro %}
+{% macro backend(model, sandbox) -%}
+    <span class="backend-label">{{ icon('flask-conical' if model == 'scripted' else 'cpu') }}{{ model }} / {{ sandbox }}</span>
+{%- endmacro %}
+{% macro run_status(row) -%}
+    {% set r = row.get('result') or {} %}
+    {% set state = 'triggered' if r.get('triggered') else ('defended' if r.get('defended') else row.status) %}
+    <span class="status-label {{ state }}">{{ icon('crosshair' if state == 'triggered' else ('shield-check' if state == 'defended' else 'clock-3')) }}{{ {'done':'Completed','error':'Failed'}.get(state, state|capitalize) }}</span>
+{%- endmacro %}

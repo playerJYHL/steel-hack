@@ -1,0 +1,94 @@
+<section id="run-surface"
+         data-view="{{ 'spectator' if spectator else 'result' }}">
+    <div id="verdict-strip" class="verdict-strip" data-state="queued">
+        <span id="verdict-icon" class="verdict-symbol">{{ icon("clock-3") }}</span>
+        <div class="verdict-copy">
+            <p id="verdict-kicker" class="eyebrow">RUN STATUS</p>
+            <h2 id="verdict" role="status" aria-live="polite">Waiting for an attack</h2>
+            <p id="verdict-detail">The arena is ready.</p>
+        </div>
+        <div class="verdict-points"><strong id="run-score">–</strong><span>POINTS</span></div>
+    </div>
+    <div class="run-toolbar">
+        <div id="run-meta" class="run-meta">No active run</div>
+        <div class="run-tools">
+            <span id="connection" class="connection" role="status">Connecting</span><button id="export-run"
+        type="button"
+        class="icon-button"
+        aria-label="Download run JSON"
+        title="Download run JSON"
+        disabled>{{ icon("download") }}</button><button id="fullscreen"
+        type="button"
+        class="icon-button"
+        aria-label="Fullscreen run"
+        title="Fullscreen run">{{ icon("maximize") }}</button>
+        </div>
+    </div>
+    <div class="run-grid">
+        <section class="browser-section" aria-labelledby="browser-heading">
+            <div class="section-heading">
+                <h2 id="browser-heading">Browser session</h2>
+                <span id="viewer-mode" class="small-label">TASK REFERENCE</span>
+            </div>
+            <div class="browser-frame">
+                <div class="browser-chrome"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="browser-location">{{ icon("globe") }}<span id="browser-address">Research target</span></span><a id="open-viewer"
+   class="icon-button"
+   target="_blank"
+   rel="noopener noreferrer"
+   title="Open session viewer"
+   aria-label="Open session viewer"
+   hidden>{{ icon("external-link") }}</a></div>
+                <div id="liveview" class="liveview">
+                    <div class="viewer-reference">
+                        <img src="{{ url_for('static', filename='target-preview.png') }}"
+                             width="1000"
+                             height="680"
+                             alt="Task page reference, not a live browser session"><span class="viewer-caption">TASK PAGE REFERENCE</span>
+                    </div>
+                </div>
+                <div class="browser-foot"><span id="viewer-description">The session has not started.</span><span>{{ icon("monitor") }} CHROMIUM</span></div>
+            </div>
+        </section>
+        <section class="trace-section" aria-labelledby="activity-heading">
+            <div class="section-heading">
+                <h2 id="activity-heading">Agent activity</h2>
+                <button id="replay-trace" type="button" class="text-button" disabled>{{ icon("play") }} Replay</button>
+            </div>
+            <div class="trace-summary"><span id="trace-status">0 steps</span><span id="run-duration">0.0s</span></div>
+            <div class="trace-scroll"
+                 tabindex="0"
+                 role="region"
+                 aria-label="Agent activity timeline">
+                <ol id="trace" class="trace">
+                </ol>
+                <div id="trace-empty" class="trace-empty">
+                    {{ icon("scan-line") }}
+                    <p>Waiting for activity</p>
+                    <span>Completed steps appear here.</span>
+                </div>
+            </div>
+            <p id="replay-state" class="replay-state" role="status" hidden>Replaying recorded steps</p>
+        </section>
+    </div>
+    <div class="run-evidence-grid">
+        <details open>
+            <summary>Submitted payload</summary>
+            <div class="evidence-heading">
+                <span id="payload-author">No submission</span><button id="copy-run-payload"
+        type="button"
+        class="icon-button"
+        title="Copy submitted payload"
+        aria-label="Copy submitted payload">{{ icon("copy") }}</button>
+            </div>
+            <pre id="run-payload" tabindex="0" aria-label="Submitted payload text">Waiting for a submission.</pre>
+        </details>
+        <details open>
+            <summary>Tripwire evidence</summary>
+            <p id="evidence-empty" class="empty-message">No tripwire evidence yet.</p>
+            <pre id="evidence"
+                 tabindex="0"
+                 aria-label="Recorded tripwire evidence"
+                 hidden></pre>
+        </details>
+    </div>
+</section>
