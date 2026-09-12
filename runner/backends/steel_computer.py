@@ -47,6 +47,7 @@ class ExecResult:
     stdout: str = ""
     stderr: str = ""
     exit_code: int = 0
+    timed_out: bool = False
 
     @property
     def output(self) -> str:
@@ -78,6 +79,7 @@ class ExecResult:
         stderr: list[str] = []
         code = 0
         code_seen = False
+        timed_out = False
 
         def as_int(v):
             try:
@@ -106,7 +108,12 @@ class ExecResult:
                 if k in ev and as_int(ev[k]) is not None:
                     code, code_seen = as_int(ev[k]), True
 
+            if ev.get("timedOut") or ev.get("timed_out"):
+                timed_out = True
+
             # a streamed chunk: a kind + a payload
+            # (confirmed Steel shape: {"event":"output","data":"..."} and a
+            #  terminal {"event":"exit","exitCode":N,"timedOut":false})
             kind = str(ev.get("type") or ev.get("event") or ev.get("stream")
                        or ev.get("channel") or ev.get("name") or "").lower()
             payload = None
@@ -125,7 +132,7 @@ class ExecResult:
                     stdout.append(payload)  # default unknown data to stdout
 
         return ExecResult(stdout="".join(stdout), stderr="".join(stderr),
-                          exit_code=code if code_seen else 0)
+                          exit_code=code if code_seen else 0, timed_out=timed_out)
 
 
 class ComputerClient:
@@ -230,7 +237,11 @@ class SteelComputerClient(ComputerClient):
         if self._region:
             body["region"] = self._region
         if timeout_s:
-            body["timeout"] = timeout_s * 1000  # ms, per CLI (--timeout seconds -> ms unclear; adjust on error
+            # Confirmed against a live create response: the field is
+            # `timeoutSeconds` (seconds), and it is the machine\'s auto-delete
+            # horizon — a safety net behind our explicit release() so a crashed
+            # run can\'t leave a machine billing forever.
+            body["timeoutSeconds"] = timeout_s
         r = self._http.post("/v1/computers", json=body)
         r.raise_for_status()
         data = r.json()

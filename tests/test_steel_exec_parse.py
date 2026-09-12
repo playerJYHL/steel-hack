@@ -24,6 +24,11 @@ from runner.backends.steel_computer import ExecResult, decode_json_stream
      '{"stream":"stderr","data":"warn"}\n{"type":"end","exit_code":3}', "hello", 3),
     ('{"type":"stdout","line":"a"}{"type":"stdout","line":"b"}{"type":"exit","code":0}', "ab", 0),
     ('{"result":{"stdout":"nested","exitCode":5}}', "nested", 5),
+    # The EXACT shape a real Steel Computer returns (application/x-ndjson),
+    # confirmed by scripts/probe_steel_exec.py against live hardware.
+    ('{"event":"start"}\n{"event":"output","data":"arena-probe\\n"}\n'
+     '{"event":"output","data":"uid=0(root)\\n"}\n'
+     '{"event":"exit","exitCode":0,"timedOut":false}', "arena-probe\nuid=0(root)", 0),
     ("", "", 0),
 ])
 def test_parses_stream_shapes(text, out, code):
@@ -49,3 +54,8 @@ def test_decoder_skips_a_garbage_line_without_aborting():
 
 def test_decoder_handles_a_plain_json_array():
     assert len(decode_json_stream('[{"a":1},{"b":2}]')) == 2
+
+
+def test_captures_timed_out_from_exit_event():
+    r = ExecResult.from_response_text('{"event":"exit","exitCode":124,"timedOut":true}')
+    assert r.timed_out is True and r.exit_code == 124
