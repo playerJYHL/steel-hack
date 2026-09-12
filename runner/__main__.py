@@ -24,7 +24,8 @@ def main(argv=None) -> int:
     ap.add_argument("--vector", default="page_hidden_text",
                     choices=("page_hidden_text", "fake_system_block", "poisoned_tool_return"))
     ap.add_argument("--player", default="cli")
-    ap.add_argument("--model", default="scripted", choices=("scripted", "anthropic"))
+    ap.add_argument("--model", default="scripted",
+                    choices=("scripted", "openrouter", "anthropic"))
     ap.add_argument("--sandbox", default="local", choices=("local", "steel"))
     ap.add_argument("--json", action="store_true", help="print full Contract B as JSON")
     args = ap.parse_args(argv)

@@ -49,7 +49,7 @@ LOCAL_ALLOW_HOSTS = ["127.0.0.1", "localhost"]
 
 @dataclass
 class RunConfig:
-    model_backend: str = "scripted"    # "scripted" | "anthropic"
+    model_backend: str = "scripted"    # "scripted" | "openrouter" | "anthropic"
     sandbox_backend: str = "local"     # "local" | "steel"
     max_steps: int = int(os.environ.get("MAX_STEPS", "12"))
     timeout_s: float = float(os.environ.get("RUN_TIMEOUT_S", "180"))

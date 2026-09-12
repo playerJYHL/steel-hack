@@ -2,8 +2,9 @@
 flask>=3.0
 
 # Real-model + real-sandbox path. Everything runs without these in local mode
-# with the scripted backend, which is how tests and CI run.
-anthropic>=0.40 ; extra == "live"
+# with the scripted backend, which is how tests and CI run. The default real
+# backend is OpenRouter and uses only the stdlib (urllib) — no package needed.
+anthropic>=0.40 ; extra == "live"      # only for the optional anthropic backend
 steel-sdk>=0.1 ; extra == "live"
 playwright>=1.40 ; extra == "live"
 python-dotenv>=1.0 ; extra == "live"

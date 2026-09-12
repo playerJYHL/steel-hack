@@ -25,14 +25,26 @@ from __future__ import annotations
 import json
 import os
 import re
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
-# Model ids come from the claude-api reference. Defaults are overridable by env
-# so the booth can dial cost up or down without touching code.
-DEFAULT_TARGET_MODEL = os.environ.get("TARGET_MODEL", "claude-sonnet-5")
-LEVEL4_MODEL = os.environ.get("LEVEL4_MODEL", "claude-opus-5")
-DEFAULT_DETECTOR_MODEL = os.environ.get("DETECTOR_MODEL", "claude-haiku-4-5")
+# The target agent runs on OpenRouter by default: the models that actually get
+# broken by a page-planted injection under a real defense (see FINDINGS.md) live
+# there — DeepSeek-V3.2, Qwen3-max, Gemini-3.1-flash-lite — while the hardened
+# tier (gpt-5-mini and Claude, near-0% on this attack) is what backs level 4's
+# wall. Ids are OpenRouter slugs; overridable by env. The anthropic backend is
+# kept as an option and expects a claude-* id instead.
+DEFAULT_TARGET_MODEL = os.environ.get("TARGET_MODEL", "deepseek/deepseek-v3.2")
+LEVEL4_MODEL = os.environ.get("LEVEL4_MODEL", "openai/gpt-5-mini")
+DEFAULT_DETECTOR_MODEL = os.environ.get("DETECTOR_MODEL", "openai/gpt-4o-mini")
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# The default urllib User-Agent is 1010-blocked by some CDNs; send a browser one.
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
 
 MAX_TOKENS = 4096
 
@@ -134,6 +146,119 @@ class AnthropicBackend(ModelBackend):
             for r in results
         ]
         messages.append({"role": "user", "content": content})
+
+
+# --- OpenRouter (real model, any provider) -----------------------------------
+
+
+def _to_openai_tools(tools: list[dict]) -> list[dict]:
+    # The agent hands out Anthropic-shaped tools (name/description/input_schema);
+    # OpenRouter speaks the OpenAI function shape.
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        }
+        for t in tools
+    ]
+
+
+def _openrouter_post(payload: dict, key: str, timeout: float = 120.0) -> dict:
+    data: bytes = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        OPENROUTER_URL,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "User-Agent": BROWSER_UA,
+            "X-Title": "break-the-agent",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
+
+
+def openrouter_complete(model: str, system: str, user: str, *, max_tokens: int = 2000) -> str:
+    # One-shot completion with no tools — used by the level-3 detector.
+    key: str = os.environ["OPENROUTER_API_KEY"]
+    body: dict = _openrouter_post(
+        {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0,
+            "max_tokens": max_tokens,
+        },
+        key,
+    )
+    msg: dict = (body.get("choices") or [{}])[0].get("message", {})
+    return msg.get("content") or ""
+
+
+class OpenRouterBackend(ModelBackend):
+    name = "openrouter"
+
+    def __init__(self, model: str | None = None):
+        self.model: str = model or DEFAULT_TARGET_MODEL
+        self._key: str = os.environ["OPENROUTER_API_KEY"]
+
+    def respond(self, messages: list[dict], tools: list[dict], *, system: str) -> ModelTurn:
+        # System is passed fresh each turn and never stored in the shared
+        # transcript, so the backend stays stateless across calls.
+        payload: dict = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "tools": _to_openai_tools(tools),
+            "tool_choice": "auto",
+            "temperature": 0,
+        }
+        body: dict = _openrouter_post(payload, self._key)
+        choice: dict = (body.get("choices") or [{}])[0]
+        msg: dict = choice.get("message", {})
+        raw_calls: list[dict] = msg.get("tool_calls") or []
+        calls: list[ToolCall] = []
+        for tc in raw_calls:
+            fn: dict = tc.get("function", {})
+            try:
+                args: dict = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            calls.append(ToolCall(id=tc.get("id", ""), name=fn.get("name", ""), input=args))
+        # Some reasoning models return a separate reasoning trace; surface it in
+        # the replay UI as the thought.
+        thought: str = (msg.get("reasoning") or "").strip()
+        return ModelTurn(
+            thought=thought,
+            text=(msg.get("content") or "").strip(),
+            tool_calls=calls,
+            raw={"content": msg.get("content"), "tool_calls": raw_calls},
+            stop_reason=choice.get("finish_reason"),
+        )
+
+    def append_assistant(self, messages: list[dict], turn: ModelTurn) -> None:
+        raw: dict = turn.raw or {}
+        msg: dict = {"role": "assistant", "content": raw.get("content") or ""}
+        if raw.get("tool_calls"):
+            msg["tool_calls"] = raw["tool_calls"]
+        messages.append(msg)
+
+    def append_tool_results(self, messages: list[dict], results: list[dict]) -> None:
+        # OpenAI returns one tool message per tool_call_id, not a single grouped
+        # user turn the way Anthropic does.
+        for r in results:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": r["tool_use_id"],
+                "content": r["content"],
+            })
 
 
 # --- deterministic double ----------------------------------------------------
@@ -285,9 +410,13 @@ class ScriptedBackend(ModelBackend):
 
 
 def build_model_backend(kind: str, *, level: int = 1) -> ModelBackend:
-    """Factory. `kind` is 'anthropic' or 'scripted'; level 4 upgrades the model."""
+    # 'openrouter' (default real path) | 'anthropic' | 'scripted'. Level 4 swaps
+    # in the hardened model for the "beat the pros" wall.
+    model: str = LEVEL4_MODEL if level >= 4 else DEFAULT_TARGET_MODEL
+    if kind == "openrouter":
+        return OpenRouterBackend(model=model)
     if kind == "anthropic":
-        return AnthropicBackend(model=LEVEL4_MODEL if level >= 4 else DEFAULT_TARGET_MODEL)
+        return AnthropicBackend(model=model)
     if kind == "scripted":
         return ScriptedBackend()
     raise ValueError(f"unknown model backend: {kind!r}")

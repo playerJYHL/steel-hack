@@ -7,7 +7,7 @@ planted fake API key against the endpoint it's bound to.
 
 Run it:
     python -m web.app                 # scripted+local backends, no keys needed
-    ARENA_MODEL=anthropic ARENA_SANDBOX=steel python -m web.app   # live path
+    ARENA_MODEL=openrouter ARENA_SANDBOX=steel python -m web.app  # live path
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .queue_worker import QueueWorker
 from .store import Store
 
 # Backends are chosen once, at boot, from the environment — the booth decides
-# free-and-safe (scripted/local) vs live (anthropic/steel) without code changes.
+# free-and-safe (scripted/local) vs live (openrouter/steel) without code changes.
 RUN_CONFIG = RunConfig(
     model_backend=os.environ.get("ARENA_MODEL", "scripted"),
     sandbox_backend=os.environ.get("ARENA_SANDBOX", "local"),
