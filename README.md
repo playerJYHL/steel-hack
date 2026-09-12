@@ -96,7 +96,7 @@ firing (DEV.md §4/B2: no dead rungs).
 ## Architecture
 
 ```
-submission ─▶ web/ (Flask, sequential queue) ─▶ runner/ ─▶ agent loop
+submission ─▶ web/ (Flask, worker pool) ─▶ runner/ ─▶ agent loop
                                                     │           │ read_page / bash / http
                                                     │           ▼
               tripwire/ ◀── all egress ── sandbox (local | steel)
@@ -113,7 +113,7 @@ submission ─▶ web/ (Flask, sequential queue) ─▶ runner/ ─▶ agent loo
   the create→seed→run→collect→**release** spine (release always in a `finally:`).
 - **`channels/` + `levels/`** — the three attack vectors, the payload library,
   the four defense configs.
-- **`web/`** — submission, the sequential async queue (cost discipline, §9),
+- **`web/`** — submission, an async worker pool (ARENA_CONCURRENCY, default 5; keep it low on the Steel path),
   live-polling results, the leaderboard, and the three-pane `/demo` big screen.
 - **`env-template/`** — the Steel Environment bootstrap so machines boot fast.
 

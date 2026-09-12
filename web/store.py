@@ -104,6 +104,25 @@ class Store:
         ).fetchone()
         return _row_to_dict(row) if row else None
 
+    def claim_next(self) -> dict | None:
+        """Atomically claim the oldest queued attack and mark it running.
+
+        One `UPDATE ... RETURNING` under SQLite's writer lock, so when several
+        pool workers poll at once, each row is handed to exactly one worker — no
+        two workers ever pick up the same submission (the race a plain
+        next_queued + mark_running would have). Returns the claimed row, or None
+        if the queue is empty.
+        """
+        with self._conn() as c:
+            row = c.execute(
+                "UPDATE attacks SET status='running', started_at=? "
+                "WHERE attack_id = (SELECT attack_id FROM attacks WHERE status='queued' "
+                "ORDER BY submitted_at ASC LIMIT 1) "
+                "RETURNING *",
+                (time.time(),),
+            ).fetchone()
+        return _row_to_dict(row) if row else None
+
     def queue_position(self, attack_id: str) -> int:
         """How many queued attacks are ahead of this one (0 == next up)."""
         row = self._conn().execute(
