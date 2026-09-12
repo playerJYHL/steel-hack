@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Break the Agent{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='arena.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">⚡ Break<span>the</span>Agent</a>
+    <nav>
+      <a href="{{ url_for('index') }}">Attack</a>
+      <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
+      <a href="{{ url_for('demo') }}">Big screen</a>
+    </nav>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+  <footer>
+    <span>A red-team range for prompt injection · UTMIST × WAT.ai · Steel track</span>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

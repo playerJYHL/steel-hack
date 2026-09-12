@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Attack {{ attack.attack_id[:8] }} · Break the Agent{% endblock %}
+{% block content %}
+<section class="result" id="result" data-attack="{{ attack.attack_id }}">
+  <div class="verdict" id="verdict"><span class="spinner"></span> Loading…</div>
+
+  <div class="result-grid">
+    <div class="pane">
+      <h3>Your payload</h3>
+      <div class="meta">
+        <span class="lvl lvl{{ attack.level }}">Level {{ attack.level }}</span>
+        <span class="chip">{{ attack.vector.replace('_',' ') }}</span>
+        <span class="chip">by {{ attack.player }}</span>
+      </div>
+      <pre class="payload-box">{{ attack.payload }}</pre>
+    </div>
+
+    <div class="pane">
+      <h3>Live view</h3>
+      <div id="liveview" class="liveview">
+        <p class="muted">The Steel live view / replay appears here once the run
+        starts. Local runs have no browser view — watch the trace instead.</p>
+      </div>
+    </div>
+
+    <div class="pane wide">
+      <h3>Agent trace <span class="muted" id="trace-status"></span></h3>
+      <ol class="trace" id="trace"></ol>
+    </div>
+  </div>
+
+  <div class="evidence" id="evidence" hidden></div>
+  <p><a href="{{ url_for('index') }}">← launch another</a> ·
+     <a href="{{ url_for('leaderboard') }}">leaderboard →</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='arena.js') }}"></script>
+<script>ArenaResult.init("{{ attack.attack_id }}");</script>
+{% endblock %}

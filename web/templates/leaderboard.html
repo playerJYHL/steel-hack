@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard · Break the Agent{% endblock %}
+{% block content %}
+<section class="board">
+  <h1>Leaderboard</h1>
+  <div class="statbar">
+    <div><b>{{ stats.total }}</b> attacks</div>
+    <div><b>{{ stats.wins }}</b> wins</div>
+    <div><b>{{ stats.queued }}</b> queued</div>
+    <div class="by-level">
+      {% for l in [1,2,3,4] %}<span class="lvl lvl{{ l }}">L{{ l }}: {{ stats.wins_by_level[l] }}</span>{% endfor %}
+    </div>
+  </div>
+  <table class="lb">
+    <thead><tr><th>#</th><th>Player</th><th>Lvl</th><th>Channel</th><th>Type</th><th>Steps</th><th>Score</th></tr></thead>
+    <tbody id="lb-body">
+      {% for w in board %}
+      <tr>
+        <td class="rank">{{ loop.index }}</td>
+        <td>{{ w.player }}</td>
+        <td><span class="lvl lvl{{ w.level }}">{{ w.level }}</span></td>
+        <td class="muted">{{ w.vector.replace('_',' ') }}</td>
+        <td><span class="ttype {{ w.trigger_type }}">{{ w.trigger_type }}</span></td>
+        <td>{{ w.steps }}</td>
+        <td class="score">{{ w.score }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No wins yet — be the first to fool the agent.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='arena.js') }}"></script>
+<script>ArenaBoard.init();</script>
+{% endblock %}
