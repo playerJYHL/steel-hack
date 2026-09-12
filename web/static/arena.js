@@ -268,6 +268,13 @@ function verdictFor(row) {
 }
 
 function renderTrace(el, result) {
+  // Follow the stream: if the viewer is already near the bottom, keep the
+  // latest step in view after this update. If they scrolled up to read an
+  // earlier step, leave their position alone.
+  const scroll = el.parentElement;
+  const stick = scroll
+    ? scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40
+    : false;
   const steps = result?.steps || [];
   const wanted = new Set();
   for (const step of steps) {
@@ -320,6 +327,8 @@ function renderTrace(el, result) {
   [...el.children].forEach((child) => {
     if (!wanted.has(child.dataset.step)) child.remove();
   });
+  // Instant jump (no smooth) so it is correct under prefers-reduced-motion.
+  if (scroll && stick) scroll.scrollTop = scroll.scrollHeight;
 }
 
 function safeViewerUrl(value) {

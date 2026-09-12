@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_ui.html" import backend, run_status %}
 {% block content %}
-    <section class="page-heading">
+    <section class="page-heading arena-hero">
         <div>
             <p class="eyebrow"><span class="signal"></span> PROMPT INJECTION ARENA</p>
             <h1>Gaslight<span class="accent">.</span></h1>
@@ -65,14 +65,18 @@
         <section class="composer" aria-labelledby="composer-heading">
             <div class="section-heading">
                 <h2 id="composer-heading"><span class="section-number">02</span> Build your attack</h2>
-                <button id="open-library" class="text-button" type="button">{{ icon("book-open") }} Examples</button>
             </div>
             <label class="field-label" for="vector">Attack channel</label>
             <div class="select-wrap">{{ icon("layers") }}<select id="vector" name="vector">{% for vector in vectors %}<option value="{{ vector }}"
         {% if initial.get('vector') == vector %}selected{% endif %}>{{ vector_meta[vector][0] }}</option>{% endfor %}</select>{{ icon("chevron-down") }}</div>
             <div class="editor-frame">
                 <div class="editor-toolbar">
-                    <label for="payload">{{ icon("file-text") }} injection.txt</label>
+                    <div class="editor-toolbar-left">
+                        <label for="payload">{{ icon("file-text") }} injection.txt</label>
+                        <button id="open-library"
+                                class="example-button"
+                                type="button">{{ icon("book-open") }} Examples</button>
+                    </div>
                     <div>
                         <button type="button"
                                 id="copy-payload"

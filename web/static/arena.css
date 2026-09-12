@@ -385,6 +385,36 @@ dt {
 .room-stats > div:nth-child(2) dd {
   color: var(--coral);
 }
+/* Compressed home hero so the attack builder + Launch button clear the fold. */
+.arena-hero {
+  margin-bottom: 24px;
+}
+.arena-hero h1 {
+  font-size: 38px;
+}
+.arena-hero .eyebrow {
+  margin-bottom: 10px;
+}
+.arena-hero .lede {
+  font-size: 14px;
+  margin-top: 8px;
+  max-width: 600px;
+  line-height: 1.55;
+}
+.arena-hero .flow-steps {
+  margin-top: 12px;
+  gap: 8px 18px;
+}
+.arena-hero .flow-steps li {
+  font-size: 12px;
+}
+.arena-hero .room-stats {
+  padding-top: 2px;
+}
+.arena-grid legend,
+.arena-grid .section-heading {
+  margin-bottom: 16px;
+}
 .section-heading {
   display: flex;
   align-items: center;
@@ -600,6 +630,41 @@ dt {
 }
 .editor-toolbar > div {
   display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.editor-toolbar .editor-toolbar-left {
+  gap: 12px;
+  min-width: 0;
+}
+.example-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #151919;
+  background: linear-gradient(180deg, var(--coral-bright), var(--coral));
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--coral) 85%, transparent);
+  transition:
+    background 160ms,
+    transform 160ms;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.example-button:hover {
+  background: linear-gradient(180deg, #ffc4b3, var(--coral-bright));
+}
+.example-button:active {
+  transform: translateY(1px);
+}
+.example-button .icon {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
 }
 .editor-body {
   display: flex;
@@ -1266,6 +1331,10 @@ dialog::backdrop {
   grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr);
   gap: 28px;
   align-items: stretch;
+  /* Fill the remaining viewport (accounting for nav + heading + verdict strip)
+     so the live view and trace fit on screen; each column scrolls internally. */
+  height: clamp(360px, calc(100dvh - 460px), 760px);
+  min-height: 0;
 }
 .run-grid .section-heading {
   margin-bottom: 12px;
@@ -1274,6 +1343,7 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .small-label {
   font: 10px var(--mono);
@@ -1433,7 +1503,8 @@ dialog::backdrop {
 }
 .liveview {
   flex: 1;
-  min-height: 480px;
+  /* Fills the fixed-height browser frame; never grows with the trace. */
+  min-height: 0;
   background: var(--bg-deep);
   position: relative;
   overflow: hidden;
@@ -1591,9 +1662,12 @@ dialog::backdrop {
 }
 .trace-scroll {
   flex: 1;
-  min-height: 260px;
+  /* min-height:0 is required for the internal scroll to engage instead of
+     stretching the page as steps stream in. */
+  min-height: 0;
   height: auto;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
 }
 .trace {
@@ -1927,10 +2001,10 @@ dialog::backdrop {
     height: 165px;
   }
   .liveview {
-    min-height: 380px;
+    min-height: 0;
   }
   .trace-scroll {
-    min-height: 240px;
+    min-height: 0;
   }
 }
 @media (max-width: 1020px) {
@@ -2169,6 +2243,8 @@ dialog::backdrop {
   .run-grid {
     grid-template-columns: 1fr;
     gap: 26px;
+    /* Stacked on phones: revert to content height so both panels are usable. */
+    height: auto;
   }
   .run-evidence-grid {
     grid-template-columns: 1fr;
