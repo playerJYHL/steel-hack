@@ -134,13 +134,6 @@ const ArenaForm = {
         "payload-count",
         `${payload.value.length.toLocaleString()} / ${payload.maxLength.toLocaleString()}`,
       );
-      setText(
-        "line-numbers",
-        Array.from(
-          { length: payload.value.split("\n").length },
-          (_, i) => i + 1,
-        ).join("\n"),
-      );
       payload.setCustomValidity("");
       $("form-error").hidden = true;
     };
@@ -149,9 +142,6 @@ const ArenaForm = {
     update();
     $("form-error").hidden = !hadError;
     payload.addEventListener("input", update);
-    payload.addEventListener("scroll", () => {
-      $("line-numbers").style.transform = `translateY(-${payload.scrollTop}px)`;
-    });
     $("copy-payload").addEventListener("click", () => copyText(payload.value));
     $("clear-payload").addEventListener("click", () => {
       payload.value = "";

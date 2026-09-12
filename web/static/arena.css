@@ -672,18 +672,6 @@ dt {
   overflow: hidden;
   position: relative;
 }
-.line-gutter {
-  padding: 18px 10px;
-  width: 40px;
-  flex-shrink: 0;
-  text-align: right;
-  font: 12px/24px var(--mono);
-  color: #75827d;
-  overflow: hidden;
-}
-#line-numbers {
-  white-space: pre;
-}
 .editor-body textarea {
   display: block;
   resize: none;
@@ -693,11 +681,14 @@ dt {
   border: 0;
   outline: 0;
   background: transparent;
-  padding: 18px 16px 18px 4px;
+  padding: 18px 16px;
   font: 12px/24px var(--mono);
   tab-size: 2;
-  white-space: pre;
-  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .editor-status {
   height: 32px;
@@ -1173,26 +1164,31 @@ dialog::backdrop {
   padding: 24px 0;
   font-size: 12px;
 }
+/* Run pages: slim the whole header stack so the live view + trace own the
+   viewport. The nav gap is trimmed via the top padding on the run main. */
+main:has(#run-surface) {
+  padding-top: 22px;
+}
 .compact {
-  margin-bottom: 28px;
+  margin-bottom: 14px;
 }
 .compact h1 {
-  font-size: 36px;
+  font-size: 26px;
 }
 .back-link {
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 .run-id {
   font-family: var(--mono);
   color: var(--muted);
-  font-size: 30px;
+  font-size: 22px;
 }
 .verdict-strip {
   display: flex;
   align-items: center;
-  gap: 24px;
-  min-height: 156px;
-  padding: 28px 32px;
+  gap: 16px;
+  min-height: 0;
+  padding: 12px 20px;
   background: var(--raised);
   border-left: 4px solid var(--amber);
   transition:
@@ -1200,26 +1196,26 @@ dialog::backdrop {
     color 220ms;
 }
 .verdict-strip .eyebrow {
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 .verdict-copy {
   min-width: 0;
   flex: 1;
 }
 .verdict-copy h2 {
-  font-size: 32px;
-  line-height: 1.2;
+  font-size: 20px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .verdict-copy > p:last-child {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
-  margin-top: 9px;
+  margin-top: 3px;
   overflow-wrap: anywhere;
 }
 .verdict-symbol {
-  width: 52px;
-  height: 52px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   border: 1px solid #536057;
@@ -1228,17 +1224,17 @@ dialog::backdrop {
   color: var(--amber);
 }
 .verdict-symbol > .icon {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 .verdict-points {
   display: flex;
   align-items: flex-end;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .verdict-points strong {
-  font: 42px/1 var(--mono);
+  font: 26px/1 var(--mono);
 }
 .verdict-points span {
   font: 10px var(--mono);
@@ -1297,7 +1293,7 @@ dialog::backdrop {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 14px 0 22px;
+  padding: 10px 0 12px;
 }
 .run-meta {
   display: flex;
@@ -1333,7 +1329,7 @@ dialog::backdrop {
   align-items: stretch;
   /* Fill the remaining viewport (accounting for nav + heading + verdict strip)
      so the live view and trace fit on screen; each column scrolls internally. */
-  height: clamp(360px, calc(100dvh - 460px), 760px);
+  height: clamp(360px, calc(100dvh - 360px), 820px);
   min-height: 0;
 }
 .run-grid .section-heading {
@@ -1815,7 +1811,7 @@ dialog::backdrop {
   padding: 32px;
 }
 .demo-mode .verdict-copy h2 {
-  font-size: 40px;
+  font-size: 22px;
 }
 .board-stats {
   display: grid;
