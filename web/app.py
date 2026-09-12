@@ -64,9 +64,16 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
 
     def render_arena(values=None, error=None):
         from channels.payloads import load_payloads
+        # Our steel path is the HYBRID (shell + browser), so both payload modes
+        # apply — show all. The local/scripted path is a shell-only agent, so
+        # show the shell-mode examples there. (Main filters to browser-only for
+        # its browser-only steel path; our steel means something different.)
+        starters = load_payloads()
+        if RUN_CONFIG.sandbox_backend != "steel":
+            starters = [p for p in starters if p.get("mode", "shell") == "shell"]
         return render_template(
             "index.html", levels=(1, 2, 3, 4), vectors=tuple(VECTOR_META),
-            starters=load_payloads(), config=RUN_CONFIG, stats=store.stats(),
+            starters=starters, config=RUN_CONFIG, stats=store.stats(),
             recent=store.recent(4), board=store.leaderboard(3),
             initial=values or {}, form_error=error, max_payload=MAX_PAYLOAD_CHARS,
         )
@@ -125,7 +132,7 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
         if not row:
             abort(404)
         row["position"] = store.queue_position(attack_id)
-        row["worker_current"] = worker.current_attack_id
+        row["worker_current"] = attack_id if worker.is_running(attack_id) else None
         return jsonify(row)
 
     @app.get("/api/leaderboard")

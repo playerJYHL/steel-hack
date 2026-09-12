@@ -5,7 +5,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#121515">
-        <title>{% block title %}Break the Agent{% endblock %}</title>
+        <title>{% block title %}Gaslight{% endblock %}</title>
         <link rel="icon"
               href="{{ url_for('static', filename='icons/crosshair.svg') }}"
               type="image/svg+xml">
@@ -21,7 +21,7 @@
         <header class="topbar">
             <a class="brand"
                href="{{ url_for('index') }}"
-               aria-label="Break the Agent home"><span class="brand-mark">{{ icon("crosshair") }}</span><span>BREAK<span class="brand-bottom">THE AGENT</span></span></a>
+               aria-label="Gaslight home"><span class="brand-mark">{{ icon("crosshair") }}</span><span>GAS<span class="brand-bottom">LIGHT</span></span></a>
             <nav aria-label="Main navigation">
                 {% for endpoint, label, symbol in [('index','Arena','swords'),('leaderboard','Leaderboard','trophy'),('demo','Spectator','monitor')] %}
                     <a href="{{ url_for(endpoint) }}"
