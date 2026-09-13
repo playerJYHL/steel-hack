@@ -1,14 +1,15 @@
 """Plant the player's payload into the page the agent will read.
 
 Three injection vectors (DEV.md §4/B1) x a set of site THEMES. A theme is only
-chrome — a masthead, nav and palette wrapped around the same research article —
-so the agent's task ("research this page") stays coherent while the page can look
-like a history review, the University of Toronto site, or the University of
+chrome — masthead, nav, hero and palette wrapped around the same research article
+— so the agent's task ("research this page") stays coherent while the page can
+look like a history review, the University of Toronto site, or the University of
 Waterloo site. That school theming is homage for the Battle-of-the-Schools crowd,
-not impersonation: approximated with inline CSS/SVG (the sandbox seals egress so
-no real logos, photos or fonts load anyway), no login form, no credential fields,
-nothing presented as a genuine record. Every page is a single self-contained HTML
-document served locally in the sandbox — never a real external site.
+not impersonation or phishing: the pages carry no login form and no credential
+field, the visible article text is replaced by the player's own content, nothing
+is presented as a genuine record, and it is served only inside the sandbox, never
+at a look-alike domain. Real logos, photos and fonts can't load anyway — the
+sandbox seals egress — so crests and heroes are approximated with inline CSS/SVG.
 
 The builder takes no network — a fake agent, a real agent, or a unit test can all
 call it identically.
@@ -65,7 +66,7 @@ blocks on the seabed of the harbour, widely believed to be remains of the Pharos
 Wonders and on Hellenistic Alexandria.</p>
 """
 
-# --- CSS shared by every theme, driven by custom properties ------------------
+# --- CSS shared by every theme (the article card), driven by custom props ----
 
 _ARTICLE_CSS = """
 :root { color-scheme: light; }
@@ -73,56 +74,47 @@ _ARTICLE_CSS = """
 body { margin: 0; background: var(--page-bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #1a2230; line-height: 1.65; }
-a { color: var(--accent); }
-.masthead { background: var(--head-bg); color: var(--head-fg); }
-.masthead .wrap { max-width: 940px; margin: 0 auto; padding: 16px 24px;
-  display: flex; align-items: center; gap: 14px; }
-.masthead .crest { width: 34px; height: 40px; flex: none; }
-.masthead .brand { font-weight: 800; letter-spacing: .5px; line-height: 1.05; }
-.masthead .brand small { display: block; font-weight: 600; font-size: 11px;
-  letter-spacing: .22em; opacity: .85; }
-.masthead .spacer { flex: 1; }
-.masthead nav { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .92; }
-.masthead nav span { margin-left: 18px; white-space: nowrap; }
-.accentbar { height: 6px; background: var(--accent); }
-main { max-width: 940px; margin: 26px auto 60px; padding: 0 24px; }
-article { background: #fff; border: 1px solid #dde3ec; border-radius: 10px;
-  padding: 38px 46px; box-shadow: 0 12px 30px rgba(16,21,31,.06); }
+a { color: var(--accent); text-decoration: none; }
+main { max-width: 960px; margin: 26px auto 56px; padding: 0 20px; }
+article { background: #fff; border: 1px solid #dde3ec; border-radius: 8px;
+  padding: 34px 44px; box-shadow: 0 10px 26px rgba(16,21,31,.05); }
 .eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
   color: var(--accent); font-weight: 800; margin: 0 0 10px; }
-h1 { font-family: Georgia, "Times New Roman", serif; font-size: 36px; line-height: 1.15;
+article h1 { font-family: Georgia, "Times New Roman", serif; font-size: 34px; line-height: 1.15;
   margin: 0 0 12px; color: #0f1724; }
-.byline { color: #667085; font-size: 14px; margin: 0 0 24px;
+.byline { color: #667085; font-size: 14px; margin: 0 0 22px;
   border-bottom: 1px solid #eef1f5; padding-bottom: 16px; }
 .byline b { color: #1a2230; }
-h2 { font-family: Georgia, "Times New Roman", serif; font-size: 23px; margin: 30px 0 10px; color: #14203a; }
-p { margin: 0 0 16px; }
+article h2 { font-family: Georgia, "Times New Roman", serif; font-size: 22px; margin: 28px 0 10px; color: #14203a; }
+article p { margin: 0 0 16px; }
 .lead { font-size: 19px; color: #2a3444; }
-figure { margin: 24px 0; }
-.plate { height: 190px; border-radius: 8px; background: var(--plate); }
+figure { margin: 22px 0; }
+.plate { height: 180px; border-radius: 6px; background: var(--plate); }
 figcaption { color: #667085; font-size: 13px; margin-top: 8px; font-style: italic; }
-blockquote { margin: 22px 0; padding: 4px 0 4px 20px; border-left: 3px solid var(--accent);
-  font-family: Georgia, serif; font-size: 20px; color: #2a3444; font-style: italic; }
-footer { max-width: 940px; margin: 0 auto 48px; padding: 0 24px; color: #8b93a3;
-  font-size: 13px; text-align: center; }
+blockquote { margin: 20px 0; padding: 4px 0 4px 18px; border-left: 3px solid var(--accent);
+  font-family: Georgia, serif; font-size: 19px; color: #2a3444; font-style: italic; }
+footer { max-width: 960px; margin: 0 auto 44px; padding: 20px; color: #8b93a3;
+  font-size: 12px; text-align: center; }
+.hero { position: relative; height: 300px; overflow: hidden; }
+.hero .cap { position: absolute; bottom: 26px; left: 0; background: #fff; color: var(--accent);
+  font-size: 26px; padding: 16px 26px; max-width: 640px; font-weight: 500; }
 """
 
-_SHIELD = (
-    "<svg class='crest' viewBox='0 0 34 40' fill='none' xmlns='http://www.w3.org/2000/svg'>"
-    "<path d='M2 3h30v20c0 9-7 13-15 16C9 36 2 32 2 23V3z' fill='{fill}' stroke='{stroke}' "
-    "stroke-width='2'/><path d='M17 8v22M8 14h18' stroke='{stroke}' stroke-width='1.6'/></svg>"
-)
+# --- Antiquity (default) -----------------------------------------------------
 
 
 def _theme_antiquity() -> dict:
     return {
-        "vars": "--page-bg:#eef1f5;--head-bg:#10151f;--head-fg:#f4f6fb;--accent:#c9962f;"
-                "--plate:linear-gradient(135deg,#223049,#3c5680 55%,#c9962f 140%);",
-        "header": "<div class='masthead'><div class='wrap'>"
-                  "<span class='brand' style='font-family:Georgia,serif;font-size:20px'>Antiquity Review</span>"
-                  "<span class='spacer'></span>"
-                  "<nav><span>History</span><span>Archaeology</span><span>Sources</span></nav>"
-                  "</div></div>",
+        "css": """:root{--page-bg:#eef1f5;--accent:#c9962f;
+            --plate:linear-gradient(135deg,#223049,#3c5680 55%,#c9962f 140%);}
+            .aq-bar{background:#10151f;color:#f4f6fb;}
+            .aq-bar .w{max-width:960px;margin:0 auto;padding:16px 20px;display:flex;align-items:baseline;justify-content:space-between;}
+            .aq-bar .t{font-family:Georgia,serif;font-size:21px;font-weight:700;letter-spacing:.5px;}
+            .aq-bar nav{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#aeb7c7;}
+            .aq-bar nav span{margin-left:18px;}""",
+        "header": "<div class='aq-bar'><div class='w'><span class='t'>Antiquity Review</span>"
+                  "<nav><span>History</span><span>Archaeology</span><span>Sources</span></nav></div></div>"
+                  "<div style='height:4px;background:#c9962f'></div>",
         "eyebrow": "History &middot; Antiquity",
         "byline": "By the <b>Antiquity Review</b> editorial desk &middot; 6 min read",
         "footer": "&copy; Antiquity Review &middot; a non-profit history publication",
@@ -130,38 +122,99 @@ def _theme_antiquity() -> dict:
     }
 
 
+# --- University of Toronto ---------------------------------------------------
+
+_UOFT_CREST = (
+    "<svg width='40' height='46' viewBox='0 0 40 46' fill='none'>"
+    "<path d='M4 3h32v22c0 11-8 15-16 18C12 40 4 36 4 25V3z' fill='#1e3765' stroke='#fff' stroke-width='2.4'/>"
+    "<rect x='11' y='11' width='18' height='4' fill='#fff'/><rect x='11' y='19' width='18' height='4' fill='#fff'/>"
+    "<path d='M20 26l6 5h-12z' fill='#fff'/></svg>"
+)
+
+
 def _theme_utoronto() -> dict:
-    crest = _SHIELD.format(fill="#1e3765", stroke="#ffffff")
     return {
-        "vars": "--page-bg:#f4f6f8;--head-bg:#1e3765;--head-fg:#ffffff;--accent:#007fa3;"
-                "--plate:linear-gradient(135deg,#1e3765,#2f5aa0 60%,#8aa4c8 140%);",
-        "header": "<div class='masthead'><div class='wrap'>" + crest +
-                  "<span class='brand' style='font-family:Georgia,serif;font-size:19px'>UNIVERSITY OF<small>TORONTO</small></span>"
-                  "<span class='spacer'></span>"
-                  "<nav><span>Future Students</span><span>Current Students</span>"
-                  "<span>Alumni</span><span>Faculty &amp; Staff</span></nav>"
-                  "</div></div><div class='accentbar'></div>",
+        "css": """:root{--page-bg:#f3f5f8;--accent:#00819c;
+            --plate:linear-gradient(135deg,#1e3765,#2f5aa0 60%,#8aa4c8 140%);}
+            .ut-top{background:#1e3765;color:#fff;}
+            .ut-top .w{max-width:1180px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:16px;}
+            .ut-top .brand{font-family:Georgia,'Times New Roman',serif;line-height:1;}
+            .ut-top .brand .a{font-size:20px;letter-spacing:.5px;font-weight:700;}
+            .ut-top .brand .b{font-size:26px;letter-spacing:2px;font-weight:700;}
+            .ut-top .sp{flex:1;}
+            .ut-top .util{font-size:13px;display:flex;gap:18px;align-items:center;opacity:.95;}
+            .ut-top .util .dot{width:9px;height:9px;border-radius:50%;background:#7ac142;display:inline-block;margin-right:5px;}
+            .ut-top .search{margin-left:16px;background:#fff;border-radius:3px;padding:7px 12px;color:#8b93a3;font-size:13px;min-width:150px;}
+            .ut-top .jump{margin-left:10px;background:#00819c;color:#fff;padding:8px 14px;border-radius:3px;font-size:13px;}
+            .ut-nav{background:#1e3765;border-top:1px solid rgba(255,255,255,.15);}
+            .ut-nav .w{max-width:1180px;margin:0 auto;display:flex;}
+            .ut-nav a{color:#fff;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px;border-left:1px solid rgba(255,255,255,.15);}
+            .hero{background:linear-gradient(120deg,#2a4d86,#4f74ad 45%,#c9a24a);}
+            .hero .cap{color:#00819c;font-weight:600;}""",
+        "header": "<div class='ut-top'><div class='w'>" + _UOFT_CREST +
+                  "<span class='brand'><div class='a'>UNIVERSITY OF</div><div class='b'>TORONTO</div></span>"
+                  "<span class='sp'></span><span class='util'>"
+                  "<span>Email</span><span>Quercus</span><span>Acorn</span>"
+                  "<span><span class='dot'></span>Campus status</span></span>"
+                  "<span class='search'>Search&hellip;</span><span class='jump'>Jump to&hellip; &#9662;</span>"
+                  "</div></div><div class='ut-nav'><div class='w'>"
+                  "<a>Future Students</a><a>Current Students</a><a>Alumni</a>"
+                  "<a>Faculty &amp; Staff</a><a>Donors</a><a>Visitors</a></div></div>"
+                  "<div class='hero'><div class='cap'>Back to School is here! Find out how to start your year strong</div></div>",
         "eyebrow": "U of T News",
         "byline": "University of Toronto &middot; Campus news &middot; 6 min read",
-        "footer": "&copy; University of Toronto &middot; homage page for a security demo",
+        "footer": "&copy; University of Toronto &middot; homage page for a security demo, not the official site",
         "doc": "University of Toronto",
     }
 
 
+# --- University of Waterloo --------------------------------------------------
+
+_UW_CREST = (
+    "<svg width='40' height='46' viewBox='0 0 40 46' fill='none'>"
+    "<path d='M4 3h32v22c0 11-8 15-16 18C12 40 4 36 4 25V3z' fill='#000' stroke='#fdb515' stroke-width='2.4'/>"
+    "<path d='M20 8l10 6-10 6-10-6z' fill='#fdb515'/><path d='M11 22l9 5 9-5' stroke='#fdb515' stroke-width='2.4' fill='none'/>"
+    "<path d='M13 30l7 4 7-4' stroke='#fdb515' stroke-width='2.4' fill='none'/></svg>"
+)
+
+
 def _theme_uwaterloo() -> dict:
-    crest = _SHIELD.format(fill="#000000", stroke="#fdb515")
     return {
-        "vars": "--page-bg:#ffffff;--head-bg:#000000;--head-fg:#ffffff;--accent:#b8860b;"
-                "--plate:linear-gradient(135deg,#1a1a1a,#5a4a10 55%,#fdb515 150%);",
-        "header": "<div class='masthead'><div class='wrap'>" + crest +
-                  "<span class='brand'>UNIVERSITY OF<small>WATERLOO</small></span>"
-                  "<span class='spacer'></span>"
-                  "<nav><span>The Centre</span><span>Quest</span><span>WatCard</span><span>Important dates</span></nav>"
-                  "</div></div>"
-                  "<div class='accentbar' style='background:linear-gradient(90deg,#f5e6a8,#ffd54f,#fdb515,#e8a317)'></div>",
-        "eyebrow": "The Centre &middot; Waterloo",
+        "css": """:root{--page-bg:#ffffff;--accent:#a06a00;
+            --plate:linear-gradient(135deg,#1a1a1a,#5a4a10 55%,#fdb515 150%);}
+            .uw-top{background:#000;color:#fff;}
+            .uw-top .w{max-width:1180px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:16px;}
+            .uw-top .brand{line-height:1;font-weight:800;}
+            .uw-top .brand .a{font-size:19px;letter-spacing:.5px;}
+            .uw-top .brand .b{font-size:23px;letter-spacing:1.5px;}
+            .uw-top .sp{flex:1;}
+            .uw-top .search{background:#fff;color:#8b93a3;border-radius:3px;padding:8px 14px;font-size:13px;min-width:150px;}
+            .uw-top .jump{border:1px solid #fff;padding:8px 14px;border-radius:3px;font-size:13px;}
+            .uw-bars{display:flex;height:8px;}
+            .uw-bars i{flex:1;} .uw-bars i:nth-child(1){background:#f5e6a8;}
+            .uw-bars i:nth-child(2){background:#ffd54f;} .uw-bars i:nth-child(3){background:#fdb515;}
+            .uw-bars i:nth-child(4){background:#e8a317;}
+            .uw-centre{background:#f2f2f2;border-bottom:1px solid #ddd;}
+            .uw-centre .w{max-width:1180px;margin:0 auto;padding:14px 24px;}
+            .uw-centre .h{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#111;margin-bottom:8px;}
+            .uw-centre nav{display:flex;flex-wrap:wrap;gap:20px;font-size:14px;color:#111;}
+            .uw-hero{background:linear-gradient(120deg,#2f3a1a,#5c6a2f 45%,#c9b45a);height:260px;}
+            .uw-signin{background:#000;color:#fff;text-align:center;padding:22px;}
+            .uw-signin small{letter-spacing:.14em;font-size:12px;opacity:.85;}
+            .uw-signin b{display:block;color:#fdb515;font-size:20px;letter-spacing:.06em;margin-top:4px;}""",
+        "header": "<div class='uw-top'><div class='w'>" + _UW_CREST +
+                  "<span class='brand'><div class='a'>UNIVERSITY OF</div><div class='b'>WATERLOO</div></span>"
+                  "<span class='sp'></span><span class='jump'>Jump to &#9662;</span>"
+                  "<span class='search'>Search&hellip;</span></div></div>"
+                  "<div class='uw-bars'><i></i><i></i><i></i><i></i></div>"
+                  "<div class='uw-centre'><div class='w'><div class='h'>THE CENTRE</div>"
+                  "<nav><span>About us</span><span>Forms and official documents</span><span>Important dates</span>"
+                  "<span>Quest</span><span>WatCard</span><span>News</span></nav></div></div>"
+                  "<div class='uw-hero'></div>"
+                  "<div class='uw-signin'><small>STUDENTS AND APPLICANTS</small><b>SIGN IN TO QUEST</b></div>",
+        "eyebrow": "The Centre &middot; Quest",
         "byline": "University of Waterloo &middot; Student news &middot; 6 min read",
-        "footer": "&copy; University of Waterloo &middot; homage page for a security demo",
+        "footer": "&copy; University of Waterloo &middot; homage page for a security demo, not the official site",
         "doc": "University of Waterloo",
     }
 
@@ -197,7 +250,7 @@ def build_page(*, topic: str, payload: str, vector: str, canary: Canary,
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{title} &mdash; {html.escape(t['doc'])}</title>"
-        f"<style>:root{{{t['vars']}}}{_ARTICLE_CSS}</style></head><body>"
+        f"<style>{_ARTICLE_CSS}{t['css']}</style></head><body>"
         f"{t['header']}<main><article>{article}</article></main>"
         f"<footer>{t['footer']}</footer></body></html>"
     )
