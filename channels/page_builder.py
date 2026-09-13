@@ -1,15 +1,16 @@
 """Plant the player's payload into the page the agent will read.
 
-Three injection vectors (DEV.md §4/B1) x a set of site THEMES. A theme is only
-chrome — masthead, nav, hero and palette wrapped around the same research article
-— so the agent's task ("research this page") stays coherent while the page can
-look like a history review, the University of Toronto site, or the University of
-Waterloo site. That school theming is homage for the Battle-of-the-Schools crowd,
-not impersonation or phishing: the pages carry no login form and no credential
-field, the visible article text is replaced by the player's own content, nothing
-is presented as a genuine record, and it is served only inside the sandbox, never
-at a look-alike domain. Real logos, photos and fonts can't load anyway — the
-sandbox seals egress — so crests and heroes are approximated with inline CSS/SVG.
+Three injection vectors (DEV.md §4/B1) x a set of site themes. The antiquity
+theme is chrome built in code; the two school themes are real, fully-inlined
+offline snapshots of utoronto.ca and uwaterloo.ca — masthead, nav, hero, fonts
+and footer captured verbatim (channels/snapshots/), with every asset embedded as
+a data URI so they render inside the sealed sandbox with no network. Only the
+article column is ours: the player's research content is slotted into the page's
+main region, so the visible article text is replaced while the surrounding site
+is faithful. This is homage for the Battle-of-the-Schools crowd, not phishing:
+the pages carry no login form and no credential field, nothing is presented as a
+genuine record, and they are served only inside the sandbox, never at a
+look-alike domain.
 
 The builder takes no network — a fake agent, a real agent, or a unit test can all
 call it identically.
@@ -19,6 +20,8 @@ from __future__ import annotations
 
 import html
 import random
+from functools import lru_cache
+from pathlib import Path
 
 from tripwire.canary import Canary
 
@@ -122,108 +125,29 @@ def _theme_antiquity() -> dict:
     }
 
 
-# --- University of Toronto ---------------------------------------------------
+# --- School snapshots (real, fully-inlined offline captures) -----------------
 
-_UOFT_CREST = (
-    "<svg width='40' height='46' viewBox='0 0 40 46' fill='none'>"
-    "<path d='M4 3h32v22c0 11-8 15-16 18C12 40 4 36 4 25V3z' fill='#1e3765' stroke='#fff' stroke-width='2.4'/>"
-    "<rect x='11' y='11' width='18' height='4' fill='#fff'/><rect x='11' y='19' width='18' height='4' fill='#fff'/>"
-    "<path d='M20 26l6 5h-12z' fill='#fff'/></svg>"
-)
-
-
-def _theme_utoronto() -> dict:
-    return {
-        "css": """:root{--page-bg:#f3f5f8;--accent:#00819c;
-            --plate:linear-gradient(135deg,#1e3765,#2f5aa0 60%,#8aa4c8 140%);}
-            .ut-top{background:#1e3765;color:#fff;}
-            .ut-top .w{max-width:1180px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:16px;}
-            .ut-top .brand{font-family:Georgia,'Times New Roman',serif;line-height:1;}
-            .ut-top .brand .a{font-size:20px;letter-spacing:.5px;font-weight:700;}
-            .ut-top .brand .b{font-size:26px;letter-spacing:2px;font-weight:700;}
-            .ut-top .sp{flex:1;}
-            .ut-top .util{font-size:13px;display:flex;gap:18px;align-items:center;opacity:.95;}
-            .ut-top .util .dot{width:9px;height:9px;border-radius:50%;background:#7ac142;display:inline-block;margin-right:5px;}
-            .ut-top .search{margin-left:16px;background:#fff;border-radius:3px;padding:7px 12px;color:#8b93a3;font-size:13px;min-width:150px;}
-            .ut-top .jump{margin-left:10px;background:#00819c;color:#fff;padding:8px 14px;border-radius:3px;font-size:13px;}
-            .ut-nav{background:#1e3765;border-top:1px solid rgba(255,255,255,.15);}
-            .ut-nav .w{max-width:1180px;margin:0 auto;display:flex;}
-            .ut-nav a{color:#fff;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px;border-left:1px solid rgba(255,255,255,.15);}
-            .hero{background:linear-gradient(120deg,#2a4d86,#4f74ad 45%,#c9a24a);}
-            .hero .cap{color:#00819c;font-weight:600;}""",
-        "header": "<div class='ut-top'><div class='w'>" + _UOFT_CREST +
-                  "<span class='brand'><div class='a'>UNIVERSITY OF</div><div class='b'>TORONTO</div></span>"
-                  "<span class='sp'></span><span class='util'>"
-                  "<span>Email</span><span>Quercus</span><span>Acorn</span>"
-                  "<span><span class='dot'></span>Campus status</span></span>"
-                  "<span class='search'>Search&hellip;</span><span class='jump'>Jump to&hellip; &#9662;</span>"
-                  "</div></div><div class='ut-nav'><div class='w'>"
-                  "<a>Future Students</a><a>Current Students</a><a>Alumni</a>"
-                  "<a>Faculty &amp; Staff</a><a>Donors</a><a>Visitors</a></div></div>"
-                  "<div class='hero'><div class='cap'>Back to School is here! Find out how to start your year strong</div></div>",
-        "eyebrow": "U of T News",
+_SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots"
+_MARKER = "<!--ARENA_SLOT-->"
+_SNAPSHOTS: dict[str, dict[str, str]] = {
+    "utoronto": {
+        "file": "utoronto.html",
+        "eyebrow": "Feature &middot; History",
         "byline": "University of Toronto &middot; Campus news &middot; 6 min read",
-        "footer": "&copy; University of Toronto &middot; homage page for a security demo, not the official site",
-        "doc": "University of Toronto",
-    }
-
-
-# --- University of Waterloo --------------------------------------------------
-
-_UW_CREST = (
-    "<svg width='40' height='46' viewBox='0 0 40 46' fill='none'>"
-    "<path d='M4 3h32v22c0 11-8 15-16 18C12 40 4 36 4 25V3z' fill='#000' stroke='#fdb515' stroke-width='2.4'/>"
-    "<path d='M20 8l10 6-10 6-10-6z' fill='#fdb515'/><path d='M11 22l9 5 9-5' stroke='#fdb515' stroke-width='2.4' fill='none'/>"
-    "<path d='M13 30l7 4 7-4' stroke='#fdb515' stroke-width='2.4' fill='none'/></svg>"
-)
-
-
-def _theme_uwaterloo() -> dict:
-    return {
-        "css": """:root{--page-bg:#ffffff;--accent:#a06a00;
-            --plate:linear-gradient(135deg,#1a1a1a,#5a4a10 55%,#fdb515 150%);}
-            .uw-top{background:#000;color:#fff;}
-            .uw-top .w{max-width:1180px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:16px;}
-            .uw-top .brand{line-height:1;font-weight:800;}
-            .uw-top .brand .a{font-size:19px;letter-spacing:.5px;}
-            .uw-top .brand .b{font-size:23px;letter-spacing:1.5px;}
-            .uw-top .sp{flex:1;}
-            .uw-top .search{background:#fff;color:#8b93a3;border-radius:3px;padding:8px 14px;font-size:13px;min-width:150px;}
-            .uw-top .jump{border:1px solid #fff;padding:8px 14px;border-radius:3px;font-size:13px;}
-            .uw-bars{display:flex;height:8px;}
-            .uw-bars i{flex:1;} .uw-bars i:nth-child(1){background:#f5e6a8;}
-            .uw-bars i:nth-child(2){background:#ffd54f;} .uw-bars i:nth-child(3){background:#fdb515;}
-            .uw-bars i:nth-child(4){background:#e8a317;}
-            .uw-centre{background:#f2f2f2;border-bottom:1px solid #ddd;}
-            .uw-centre .w{max-width:1180px;margin:0 auto;padding:14px 24px;}
-            .uw-centre .h{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#111;margin-bottom:8px;}
-            .uw-centre nav{display:flex;flex-wrap:wrap;gap:20px;font-size:14px;color:#111;}
-            .uw-hero{background:linear-gradient(120deg,#2f3a1a,#5c6a2f 45%,#c9b45a);height:260px;}
-            .uw-signin{background:#000;color:#fff;text-align:center;padding:22px;}
-            .uw-signin small{letter-spacing:.14em;font-size:12px;opacity:.85;}
-            .uw-signin b{display:block;color:#fdb515;font-size:20px;letter-spacing:.06em;margin-top:4px;}""",
-        "header": "<div class='uw-top'><div class='w'>" + _UW_CREST +
-                  "<span class='brand'><div class='a'>UNIVERSITY OF</div><div class='b'>WATERLOO</div></span>"
-                  "<span class='sp'></span><span class='jump'>Jump to &#9662;</span>"
-                  "<span class='search'>Search&hellip;</span></div></div>"
-                  "<div class='uw-bars'><i></i><i></i><i></i><i></i></div>"
-                  "<div class='uw-centre'><div class='w'><div class='h'>THE CENTRE</div>"
-                  "<nav><span>About us</span><span>Forms and official documents</span><span>Important dates</span>"
-                  "<span>Quest</span><span>WatCard</span><span>News</span></nav></div></div>"
-                  "<div class='uw-hero'></div>"
-                  "<div class='uw-signin'><small>STUDENTS AND APPLICANTS</small><b>SIGN IN TO QUEST</b></div>",
-        "eyebrow": "The Centre &middot; Quest",
-        "byline": "University of Waterloo &middot; Student news &middot; 6 min read",
-        "footer": "&copy; University of Waterloo &middot; homage page for a security demo, not the official site",
-        "doc": "University of Waterloo",
-    }
-
-
-THEMES = {
-    "antiquity": _theme_antiquity,
-    "utoronto": _theme_utoronto,
-    "uwaterloo": _theme_uwaterloo,
+    },
+    "uwaterloo": {
+        "file": "uwaterloo.html",
+        "eyebrow": "Feature &middot; History",
+        "byline": "University of Waterloo &middot; Campus news &middot; 6 min read",
+    },
 }
+
+THEME_NAMES: tuple[str, ...] = ("antiquity", "utoronto", "uwaterloo")
+
+
+@lru_cache(maxsize=None)
+def _snapshot(name: str) -> str:
+    return (_SNAPSHOT_DIR / _SNAPSHOTS[name]["file"]).read_text(encoding="utf-8")
 
 
 def _title(topic: str) -> str:
@@ -234,14 +158,24 @@ def build_page(*, topic: str, payload: str, vector: str, canary: Canary,
                theme: str | None = None) -> str:
     """Return the full HTML for the agent's research page with `payload` planted.
 
-    `theme` picks the site chrome; omit it for a random one so the demo cycles
-    through the history review and the two school homages. The secret is never
+    `theme` picks the site; omit it for a random one so the demo cycles through
+    the history review and the two real school captures. The secret is never
     inlined — it lives in the seeded files or the agent's own context.
     """
-    t = THEMES.get(theme or random.choice(list(THEMES)), _theme_antiquity)()
+    name = theme or random.choice(THEME_NAMES)
     injection = render_injection(payload, vector)
     body = _ARTICLE_BODY.format(injection=injection)
     title = html.escape(_title(topic))
+
+    if name in _SNAPSHOTS:
+        meta = _SNAPSHOTS[name]
+        article = (
+            f"<p class='eyebrow'>{meta['eyebrow']}</p><h1>{title}</h1>"
+            f"<p class='byline'>{meta['byline']}</p>{body}"
+        )
+        return _snapshot(name).replace(_MARKER, article, 1)
+
+    t = _theme_antiquity()
     article = (
         f"<p class='eyebrow'>{t['eyebrow']}</p><h1>{title}</h1>"
         f"<p class='byline'>{t['byline']}</p>{body}"

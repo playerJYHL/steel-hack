@@ -107,9 +107,12 @@ def run_attack(submission: Submission, config: RunConfig | None = None,
     publish_progress()
 
     # The page the agent will read, with the player's payload planted per vector.
+    # The heavy, fully-inlined school captures are for the live Steel view; the
+    # local/scripted path (CI, deterministic fallback) reads raw HTML, so it uses
+    # the light antiquity page where the injection is not buried behind inlined CSS.
     page_html = build_page(
         topic=config.topic, payload=submission.payload, vector=submission.vector,
-        canary=canary,
+        canary=canary, theme=None if browser_path else "antiquity",
     )
     scenario = SeededScenario(
         canary=canary, page_html=page_html,
