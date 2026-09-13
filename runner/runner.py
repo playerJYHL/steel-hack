@@ -19,7 +19,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tripwire.canary import Canary
 from tripwire.events import EventLog
@@ -54,6 +54,13 @@ class RunConfig:
     max_steps: int = int(os.environ.get("MAX_STEPS", "12"))
     timeout_s: float = float(os.environ.get("RUN_TIMEOUT_S", "180"))
     topic: str = DEFAULT_TOPIC
+    # Debug/demo mode: leave the Steel Computer running after the attack instead
+    # of destroying it, so it can be opened and inspected in the dashboard.
+    # Costs money (the machine keeps billing until its timeoutSeconds auto-delete
+    # or a manual delete), so it is opt-in via ARENA_KEEP_COMPUTER=1.
+    keep_computer: bool = field(
+        default_factory=lambda: os.environ.get("ARENA_KEEP_COMPUTER", "").strip()
+        not in ("", "0", "false", "no"))
 
 
 def run_attack(submission: Submission, config: RunConfig | None = None,
@@ -125,7 +132,8 @@ def run_attack(submission: Submission, config: RunConfig | None = None,
             # back into `event_log`, which `monitor.events` reads — so the agent
             # loop's tripwire check is identical to the local path.
             from .backends.sandbox import SteelSandbox
-            sandbox = SteelSandbox(scenario, event_log)
+            sandbox = SteelSandbox(scenario, event_log,
+                                   keep_computer=config.keep_computer)
         closers.append(sandbox.release)
 
         result.steel_session_id = sandbox.session_id

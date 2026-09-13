@@ -245,10 +245,12 @@ class SteelSandbox(Sandbox):
 
     def __init__(self, scenario: SeededScenario, event_log=None, *,
                  client=None, browser=None, api_key: str | None = None,
-                 install: bool = True, proxy_port: int | None = None):
+                 install: bool = True, proxy_port: int | None = None,
+                 keep_computer: bool = False):
         self.scenario = scenario
         self.event_log = event_log
         self._released = False
+        self.keep_computer = keep_computer
         self.first_detection = None
         self._remote_synced = 0
         self.proxy_port = proxy_port or int(os.environ.get("ARENA_STEEL_PROXY_PORT",
@@ -423,11 +425,24 @@ class SteelSandbox(Sandbox):
         if self._released:
             return
         self._released = True
-        # Release both machines; one failure must not skip the other.
-        for closer in (getattr(self, "browser", None), self.client):
-            try:
-                if closer is not None:
-                    closer.release()
-            except Exception:
-                import traceback
-                traceback.print_exc()
+        # The browser session is always released (cheap, and not what you\'d
+        # inspect). The Computer is released too, unless keep_computer is set —
+        # then it is left running so you can open it in the dashboard. Its
+        # timeoutSeconds auto-delete still applies as a backstop against leaks.
+        try:
+            if getattr(self, "browser", None) is not None:
+                self.browser.release()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+        if self.keep_computer:
+            print(f"[arena] ARENA_KEEP_COMPUTER set — leaving computer "
+                  f"{self.client.computer_id} running for inspection. "
+                  f"Delete it in the Steel dashboard when done (it bills until "
+                  f"then or its timeout).", flush=True)
+            return
+        try:
+            self.client.release()
+        except Exception:
+            import traceback
+            traceback.print_exc()

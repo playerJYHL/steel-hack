@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
@@ -167,6 +168,18 @@ def _to_openai_tools(tools: list[dict]) -> list[dict]:
     ]
 
 
+def require_openrouter_key() -> str:
+    """The OpenRouter key, or a clear error instead of a cryptic KeyError."""
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is not set. Export your OpenRouter key "
+            "(https://openrouter.ai/keys) before running the openrouter model, "
+            "e.g. `export OPENROUTER_API_KEY=sk-or-v1-...`."
+        )
+    return key
+
+
 def _openrouter_post(payload: dict, key: str, timeout: float = 120.0) -> dict:
     data: bytes = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -180,13 +193,39 @@ def _openrouter_post(payload: dict, key: str, timeout: float = 120.0) -> dict:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        # Turn the raw "HTTP Error 401: Unauthorized" into something a person at
+        # the booth can act on. The response body often names the real reason.
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:300].strip()
+        except Exception:
+            pass
+        detail = f" — {detail}" if detail else ""
+        if exc.code == 401:
+            raise RuntimeError(
+                "OpenRouter rejected the API key (401 Unauthorized): check "
+                "OPENROUTER_API_KEY is valid, complete, and not revoked" + detail
+            ) from exc
+        if exc.code == 402:
+            raise RuntimeError(
+                "OpenRouter says payment required (402): the account is out of "
+                "credits — top up, or set TARGET_MODEL to a ':free' model" + detail
+            ) from exc
+        if exc.code == 429:
+            raise RuntimeError(
+                "OpenRouter rate-limited this request (429): retry, or lower "
+                "ARENA_CONCURRENCY" + detail
+            ) from exc
+        raise RuntimeError(f"OpenRouter HTTP {exc.code} {exc.reason}{detail}") from exc
 
 
 def openrouter_complete(model: str, system: str, user: str, *, max_tokens: int = 2000) -> str:
     # One-shot completion with no tools — used by the level-3 detector.
-    key: str = os.environ["OPENROUTER_API_KEY"]
+    key: str = require_openrouter_key()
     body: dict = _openrouter_post(
         {
             "model": model,
@@ -208,7 +247,7 @@ class OpenRouterBackend(ModelBackend):
 
     def __init__(self, model: str | None = None):
         self.model: str = model or DEFAULT_TARGET_MODEL
-        self._key: str = os.environ["OPENROUTER_API_KEY"]
+        self._key: str = require_openrouter_key()
 
     def respond(self, messages: list[dict], tools: list[dict], *, system: str) -> ModelTurn:
         # System is passed fresh each turn and never stored in the shared

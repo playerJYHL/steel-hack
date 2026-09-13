@@ -147,3 +147,31 @@ def test_release_closes_browser_and_computer(scenario, tmp_path):
                       browser=_SpyBrowser(), install=False, proxy_port=_free_port())
     sb.release()
     assert closed["browser"] is True
+
+
+def test_keep_computer_leaves_the_machine_running(scenario, tmp_path):
+    """ARENA_KEEP_COMPUTER mode: the browser is still released, but the Computer
+    is left running for inspection (release() must not destroy it)."""
+    from runner.backends.steel_computer import LocalComputerClient
+    from tripwire.events import EventLog
+
+    released = {"computer": False, "browser": False}
+
+    class SpyClient(LocalComputerClient):
+        def release(self):
+            released["computer"] = True
+            return super().release()
+
+    class SpyBrowser(LocalBrowser):
+        def release(self):
+            released["browser"] = True
+
+    sb = SteelSandbox(scenario, EventLog(tmp_path / "e.jsonl"), client=SpyClient(),
+                      browser=SpyBrowser(), install=False, proxy_port=_free_port(),
+                      keep_computer=True)
+    try:
+        sb.release()
+        assert released["browser"] is True, "browser should still be released"
+        assert released["computer"] is False, "computer must be kept alive"
+    finally:
+        sb.client.release()  # real cleanup of the temp machine + bg procs
