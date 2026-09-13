@@ -1561,6 +1561,60 @@ main:has(#run-surface) {
     max-height: 100%;
   }
 }
+/* Recorded replay video reuses the same no-letterbox 16:9 stage. */
+.liveview video {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  display: block;
+  margin: auto;
+  background: #000;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+@supports (width: 1cqh) {
+  .liveview video {
+    width: min(100%, calc(100cqh * 16 / 9));
+    height: auto;
+    max-height: 100%;
+  }
+}
+/* Recording expired/absent: clean "session ended" state, not a broken player. */
+.viewer-ended {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+  padding: 32px;
+  color: var(--muted);
+  background:
+    radial-gradient(
+      520px 320px at 50% 42%,
+      #1a2322 0%,
+      rgba(16, 19, 18, 0) 70%
+    ),
+    var(--bg-deep);
+}
+.viewer-ended > .icon {
+  width: 30px;
+  height: 30px;
+  color: #73877d;
+}
+.viewer-ended strong {
+  color: var(--text);
+  font: 600 14px var(--sans);
+  letter-spacing: 0.01em;
+}
+.viewer-ended span {
+  font: 10px/1.6 var(--mono);
+  letter-spacing: 0.06em;
+  max-width: 300px;
+}
 .viewer-reference {
   height: 100%;
   overflow: hidden;
@@ -2672,7 +2726,8 @@ main:has(#run-surface) {
     height: auto;
     min-height: 0;
   }
-  .liveview iframe {
+  .liveview iframe,
+  .liveview video {
     width: 100%;
     height: 100%;
     aspect-ratio: auto;

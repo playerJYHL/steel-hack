@@ -14,5 +14,6 @@
     <script type="application/json" id="initial-run">{{ attack|tojson }}</script>
 {% endblock %}
 {% block scripts %}
+    <script src="{{ url_for('static', filename='vendor/hls.min.js') }}"></script>
     <script>document.addEventListener('DOMContentLoaded', () => ArenaResult.init({{ attack.attack_id|tojson }}));</script>
 {% endblock %}

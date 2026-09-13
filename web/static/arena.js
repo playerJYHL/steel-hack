@@ -363,6 +363,10 @@ class RunView {
     this.lastId = null;
     this.viewerUrl = null;
     this.idleMode = null;
+    // What is mounted in the live-view stage right now (iframe/video/idle),
+    // so a poll never rebuilds a live iframe or restarts a playing recording.
+    this.mountKey = null;
+    this.hls = null;
     this.reference = $("liveview").firstElementChild.cloneNode(true);
     this.row = null;
     // "The moment": fire the dramatic overlay once, only for a run we watched
@@ -541,10 +545,12 @@ class RunView {
     if (id !== this.lastId) {
       this.stopReplay();
       this.hideOverlay();
+      this.teardownReplay();
       $("trace").replaceChildren();
       $("liveview").replaceChildren(this.reference.cloneNode(true));
       this.viewerUrl = null;
       this.idleMode = null;
+      this.mountKey = null;
       this.lastId = id;
       this.lastState = null;
       this.watched = false;
@@ -630,17 +636,27 @@ class RunView {
       status: row?.status,
       state: v.state,
       mode: r.mode,
+      attackId: id,
     });
     this.syncMoment(v.state, r, row);
   }
   mountViewer(url, options) {
-    const { sandbox, status, state, mode } = options || {};
+    const { sandbox, status, state, mode, attackId } = options || {};
     const ended = ["done", "error"].includes(status);
     const active = ["queued", "running"].includes(status);
     const local = sandbox === "local";
     const connecting = !url && !local && active;
-    if (url !== this.viewerUrl) {
-      if (url) {
+    const replay = ended && !local; // finished Steel run -> recorded video
+    // Decide what the stage should hold, then only remount when it changes so a
+    // live iframe is never reloaded and a playing recording never restarts.
+    let want;
+    if (replay) want = { kind: "video", key: `video:${attackId || ""}` };
+    else if (active && url) want = { kind: "iframe", key: `iframe:${url}` };
+    else if (connecting) want = { kind: "connecting", key: "connecting" };
+    else want = { kind: "reference", key: "reference" };
+    if (want.key !== this.mountKey) {
+      this.teardownReplay(); // kill any prior hls instance before swapping
+      if (want.kind === "iframe") {
         const frame = node("iframe");
         frame.title = "Live session viewer";
         frame.referrerPolicy = "no-referrer";
@@ -649,53 +665,53 @@ class RunView {
         const stage = node("div", "viewer-stage");
         stage.append(frame);
         $("liveview").replaceChildren(stage); // 16:9 stage, no letterbox
-        this.idleMode = null;
+      } else if (want.kind === "video") {
+        this.mountReplay(attackId, want.key); // tears down the dead iframe first
       } else {
-        this.idleMode = null;
-        $("liveview").replaceChildren(this.idleNode(connecting));
+        $("liveview").replaceChildren(this.idleNode(want.kind === "connecting"));
       }
-      this.viewerUrl = url;
-    } else if (!url) {
-      // No session yet: swap the placeholder only when its nature changes.
-      const wanted = connecting ? "connecting" : "reference";
-      if (this.idleMode !== wanted)
-        $("liveview").replaceChildren(this.idleNode(connecting));
+      this.mountKey = want.key;
+      this.viewerUrl = want.kind === "iframe" ? url : null;
+      this.idleMode = null;
     }
     const open = $("open-viewer");
-    open.hidden = !url;
-    if (url) open.href = url;
+    // The live viewer is dead once the run ends, so only expose it while live.
+    open.hidden = !url || ended;
+    if (url && !ended) open.href = url;
     else open.removeAttribute("href");
     setText(
       "browser-address",
-      url
-        ? new URL(url).hostname
-        : connecting
-          ? "Provisioning session"
-          : "Task page reference",
+      replay
+        ? "Session recording"
+        : url
+          ? new URL(url).hostname
+          : connecting
+            ? "Provisioning session"
+            : "Task page reference",
     );
     setText(
       "viewer-mode",
       local
         ? "LOCAL SIMULATION"
-        : url
-          ? ended
-            ? "SESSION ENDED"
-            : "LIVE SESSION"
-          : connecting
-            ? "CONNECTING"
-            : "TASK REFERENCE",
+        : replay
+          ? "RECORDED REPLAY"
+          : url
+            ? "LIVE SESSION"
+            : connecting
+              ? "CONNECTING"
+              : "TASK REFERENCE",
     );
     setText(
       "viewer-description",
       local
         ? "Reference image only. The local sandbox has no live stream."
-        : url
-          ? ended
-            ? "Session released. Viewer availability is managed by Steel."
-            : "Live Steel session. The agent's steps stream alongside."
-          : connecting
-            ? "Booting the cloud session. The live view mounts the moment it is ready."
-            : "Reference image only. Waiting for a live session.",
+        : replay
+          ? "Recorded browser session. The step trace replays alongside."
+          : url
+            ? "Live Steel session. The agent's steps stream alongside."
+            : connecting
+              ? "Booting the cloud session. The live view mounts the moment it is ready."
+              : "Reference image only. Waiting for a live session.",
     );
     const pill = $("live-pill");
     if (pill) {
@@ -710,6 +726,9 @@ class RunView {
       } else if (connecting) {
         key = "connecting";
         label = "CONNECTING";
+      } else if (replay) {
+        key = "ended";
+        label = "REPLAY";
       } else if (state === "defended") {
         key = "ended";
         label = "HELD";
@@ -742,6 +761,99 @@ class RunView {
     }
     this.idleMode = "reference";
     return this.reference.cloneNode(true);
+  }
+  // Finished run: replace the dead live iframe with the recorded HLS video.
+  mountReplay(attackId, key) {
+    // Holding state first, so the released ("Browser Disconnected") iframe is
+    // gone immediately while the recording is fetched.
+    const wrap = node("div", "viewer-connecting");
+    const radar = node("div", "radar");
+    radar.append(icon("radio"));
+    wrap.append(
+      radar,
+      node("strong", "", "Loading recording"),
+      node("span", "", "Fetching the recorded session replay."),
+    );
+    $("liveview").replaceChildren(wrap);
+    if (!attackId) {
+      this.showReplayUnavailable(key);
+      return;
+    }
+    const manifest = api(`/api/replay/${encodeURIComponent(attackId)}.m3u8`);
+    fetch(manifest, { cache: "no-store" })
+      .then((res) => {
+        if (this.mountKey !== key) return; // the view moved on
+        if (!res.ok) {
+          this.showReplayUnavailable(key);
+          return;
+        }
+        this.playReplay(manifest, key);
+      })
+      .catch(() => this.showReplayUnavailable(key));
+  }
+  playReplay(manifest, key) {
+    if (this.mountKey !== key) return;
+    const video = node("video");
+    video.controls = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.title = "Recorded session replay";
+    const stage = node("div", "viewer-stage");
+    stage.append(video);
+    $("liveview").replaceChildren(stage); // same 16:9 stage, no letterbox
+    const fail = () => {
+      if (this.mountKey === key) this.showReplayUnavailable(key);
+    };
+    const Hls = window.Hls;
+    if (Hls && Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true });
+      this.hls = hls;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data && data.fatal) {
+          this.teardownReplay();
+          fail();
+        }
+      });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play?.().catch(() => {});
+      });
+      hls.loadSource(manifest);
+      hls.attachMedia(video);
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari plays HLS natively.
+      video.src = manifest;
+      video.addEventListener("error", fail, { once: true });
+      video.play?.().catch(() => {});
+    } else {
+      fail();
+    }
+  }
+  showReplayUnavailable(key) {
+    if (key && this.mountKey !== key) return;
+    this.teardownReplay();
+    const wrap = node("div", "viewer-ended");
+    wrap.append(icon("scan-line"));
+    wrap.append(
+      node("strong", "", "Session ended"),
+      node(
+        "span",
+        "",
+        "The browser recording is unavailable. Replay the step trace beside this view.",
+      ),
+    );
+    $("liveview").replaceChildren(wrap);
+  }
+  teardownReplay() {
+    if (this.hls) {
+      try {
+        this.hls.destroy();
+      } catch {
+        /* best-effort */
+      }
+      this.hls = null;
+    }
   }
 }
 
