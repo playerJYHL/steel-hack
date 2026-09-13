@@ -41,6 +41,9 @@ function setText(id, text) {
   const el = $(id);
   if (el && el.textContent !== String(text)) el.textContent = text;
 }
+function setNode(el, text) {
+  if (el && el.textContent !== String(text)) el.textContent = text;
+}
 function setButton(button, symbol, label) {
   button.replaceChildren(icon(symbol), document.createTextNode(` ${label}`));
 }
@@ -766,6 +769,216 @@ const ArenaDemo = {
   },
 };
 
+// The Spectator wall: a live gallery of every session at once.
+const WALL_LIVE_CAP = 6; // max concurrent live iframes, to bound WebRTC load
+
+function wallVerdict(s) {
+  if (s.status === "running")
+    return { state: "running", pill: "LIVE", icon: "scan-line" };
+  if (s.triggered)
+    return { state: "triggered", pill: "COMPROMISED", icon: "crosshair" };
+  if (s.error || s.status === "error")
+    return { state: "error", pill: "ERROR", icon: "circle-alert" };
+  if (s.defended)
+    return { state: "defended", pill: "HELD", icon: "shield-check" };
+  return { state: "done", pill: "HELD", icon: "check" };
+}
+
+function tileIframe(url) {
+  const frame = node("iframe");
+  frame.title = "Live session viewer";
+  frame.referrerPolicy = "no-referrer";
+  frame.loading = "lazy";
+  frame.allow = "fullscreen";
+  frame.src = embedViewerUrl(url); // read-only embed
+  return frame;
+}
+
+function tileRunningFace(s) {
+  const wrap = node("div", "tile-idle");
+  wrap.append(
+    node("span", "tile-idle-dot"),
+    node("strong", "", "Running"),
+    node("span", "tile-idle-steps", `${s.step_count || 0} steps`),
+  );
+  return wrap;
+}
+
+function tileResultFace(s, v) {
+  const wrap = node("div", "tile-result");
+  const badge = node("span", "tile-result-icon");
+  badge.append(icon(v.icon));
+  const replay = node("span", "tile-replay");
+  replay.append(icon("play"), document.createTextNode(" Watch replay"));
+  wrap.append(
+    badge,
+    node("strong", "", v.pill),
+    node("span", "tile-result-score", `${s.score || 0} pts`),
+    replay,
+  );
+  return wrap;
+}
+
+function createTile(s) {
+  const el = node("div", "wall-tile");
+  el.setAttribute("role", "listitem");
+  el.dataset.id = s.attack_id;
+
+  const avatar = node("span", "tile-avatar");
+  avatar.append(icon("fingerprint"));
+  const player = node("strong");
+  const meta = node("small");
+  const who = node("span", "tile-who");
+  who.append(player, meta);
+  const idWrap = node("span", "tile-id");
+  idWrap.append(avatar, who);
+
+  const level = node("span", "tile-level");
+  const pill = node("span", "tile-pill");
+  const badges = node("span", "tile-badges");
+  badges.append(level, pill);
+
+  const head = node("div", "tile-head");
+  head.append(idWrap, badges);
+
+  const body = node("div", "tile-body");
+
+  const footVector = node("span");
+  const footSteps = node("span");
+  const foot = node("div", "tile-foot");
+  foot.append(footVector, footSteps);
+
+  // Stretched overlay link so the whole tile navigates while the read-only
+  // iframe below never grabs the click.
+  const link = node("a", "tile-link");
+  link.href = api(`/attack/${encodeURIComponent(s.attack_id)}`);
+  link.setAttribute("aria-label", `Open the full run by ${s.player}`);
+
+  el.append(head, body, foot, link);
+  return {
+    el,
+    body,
+    player,
+    meta,
+    level,
+    pill,
+    footVector,
+    footSteps,
+    iframe: null,
+    url: null,
+    kind: null,
+    triggered: false,
+  };
+}
+
+function updateTile(entry, s, kind) {
+  const v = wallVerdict(s);
+  setNode(entry.player, s.player);
+  setNode(entry.meta, `${s.model_backend || "?"} / ${s.sandbox_backend || "?"}`);
+  setNode(entry.level, `L${s.level}`);
+  setNode(entry.pill, v.pill);
+  entry.pill.dataset.state = v.state;
+  setNode(entry.footVector, channels[s.vector] || s.vector || "");
+  setNode(entry.footSteps, `${s.step_count || 0} steps`);
+  entry.el.dataset.state = v.state;
+
+  // Fire a brief per-tile alert the moment it flips to compromised.
+  if (s.triggered && !entry.triggered && !reducedMotion()) {
+    entry.el.classList.remove("tile-alert");
+    void entry.el.offsetWidth;
+    entry.el.classList.add("tile-alert");
+  }
+  entry.triggered = !!s.triggered;
+
+  const url = kind === "live" ? safeViewerUrl(s.viewer_url) : null;
+  // Only touch the body when the kind changes, or when a live tile's viewer_url
+  // actually changes — so a live iframe is never rebuilt (no WebRTC reconnect).
+  if (entry.kind !== kind) {
+    entry.kind = kind;
+    if (kind === "live") {
+      entry.iframe = tileIframe(url);
+      entry.url = url;
+      entry.body.replaceChildren(entry.iframe);
+    } else {
+      entry.iframe = null;
+      entry.url = null;
+      entry.body.replaceChildren(
+        kind === "running" ? tileRunningFace(s) : tileResultFace(s, v),
+      );
+    }
+    entry.body.dataset.kind = kind;
+  } else if (kind === "live" && url && url !== entry.url) {
+    entry.iframe = tileIframe(url);
+    entry.url = url;
+    entry.body.replaceChildren(entry.iframe);
+  } else if (kind === "running") {
+    const steps = entry.body.querySelector(".tile-idle-steps");
+    if (steps) steps.textContent = `${s.step_count || 0} steps`;
+  }
+}
+
+const ArenaWall = {
+  init() {
+    const grid = $("wall-grid");
+    const empty = $("wall-empty");
+    const tiles = new Map(); // attack_id -> entry (kept alive across polls)
+
+    const render = (data) => {
+      const sessions = (data && data.sessions) || [];
+      const liveCount = sessions.filter((s) => s.status === "running").length;
+      setText("wall-live-n", liveCount);
+      setText("wall-recent-n", sessions.length - liveCount);
+      empty.hidden = sessions.length > 0;
+
+      // Choose which running tiles embed a live iframe, capped at WALL_LIVE_CAP.
+      // Prefer tiles that ALREADY have an iframe so a running stream is never
+      // torn down just because newer sessions pushed it down the list.
+      const runnable = sessions.filter(
+        (s) => s.status === "running" && safeViewerUrl(s.viewer_url),
+      );
+      const live = new Set();
+      for (const s of runnable) {
+        if (live.size >= WALL_LIVE_CAP) break;
+        if (tiles.get(s.attack_id)?.iframe) live.add(s.attack_id);
+      }
+      for (const s of runnable) {
+        if (live.size >= WALL_LIVE_CAP) break;
+        live.add(s.attack_id);
+      }
+
+      const present = new Set();
+      sessions.forEach((s, index) => {
+        present.add(s.attack_id);
+        const kind =
+          s.status === "running"
+            ? live.has(s.attack_id)
+              ? "live"
+              : "running"
+            : "result";
+        let entry = tiles.get(s.attack_id);
+        if (!entry) {
+          entry = createTile(s);
+          tiles.set(s.attack_id, entry);
+          grid.append(entry.el);
+        }
+        // Reorder with the CSS order property — never re-parent a tile, which
+        // would reload its live iframe.
+        entry.el.style.order = String(index);
+        updateTile(entry, s, kind);
+      });
+
+      for (const [id, entry] of tiles) {
+        if (!present.has(id)) {
+          entry.el.remove();
+          tiles.delete(id);
+        }
+      }
+    };
+
+    return new Poller(api("/api/sessions?limit=24"), render, 2500).start();
+  },
+};
+
 function renderBoard(data, filters = {}) {
   const rows = (data.board || [])
     .map((row, index) => ({ ...row, rank: index + 1 }))
@@ -934,4 +1147,6 @@ if (typeof module !== "undefined")
     renderBoard,
     safeViewerUrl,
     ArenaForm,
+    ArenaWall,
+    wallVerdict,
   };

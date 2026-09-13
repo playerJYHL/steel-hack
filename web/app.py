@@ -144,6 +144,43 @@ def create_app(store: Store | None = None, start_worker: bool = True) -> Flask:
             limit = 24
         return jsonify({"sessions": store.list_sessions(limit)})
 
+    @app.get("/api/replay/<attack_id>.m3u8")
+    def api_replay(attack_id):
+        """Proxy a finished run's Steel recording as an HLS manifest. The live
+        viewer (debug_url) goes dead once the session is released, but Steel keeps
+        the recording — its /hls manifest needs the API key, which must never
+        reach the browser, so we fetch it server-side. The segments it points to
+        are public pre-signed (CORS *) URLs the player fetches directly. 404 when
+        there is no session or the recording is gone, so the UI falls back to the
+        step-trace replay."""
+        import os
+        import re
+        import urllib.request
+
+        row = store.get(attack_id)
+        if not row:
+            abort(404)
+        sid = (row.get("result") or {}).get("steel_session_id")
+        key = os.environ.get("STEEL_API_KEY")
+        if not sid or not key or not re.fullmatch(r"[A-Za-z0-9-]{16,64}", str(sid)):
+            abort(404)
+        req = urllib.request.Request(
+            f"https://api.steel.dev/v1/sessions/{sid}/hls",
+            headers={
+                "steel-api-key": key,
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"),
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as upstream:
+                body = upstream.read()
+        except Exception:
+            abort(404)
+        resp = app.response_class(body, mimetype="application/vnd.apple.mpegurl")
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
     @app.get("/api/latest")
     def api_latest():
         """For the demo screen: the running attack, else the most recent one."""

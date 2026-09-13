@@ -2,16 +2,28 @@
 {% block title %}Spectator | Gaslight{% endblock %}
 {% block body_class %}demo-mode{% endblock %}
 {% block content %}
-    <section class="page-heading compact">
+    <section class="page-heading compact wall-heading">
         <div>
-            <p class="eyebrow"><span class="signal"></span> SPECTATOR VIEW</p>
-            <h1>The arena, unfolding<span class="accent">.</span></h1>
+            <p class="eyebrow"><span class="signal"></span> SPECTATOR WALL</p>
+            <h1>The arena, live<span class="accent">.</span></h1>
         </div>
         <a class="secondary-button" href="{{ url_for('index') }}">Enter arena {{ icon("arrow-up-right") }}</a>
     </section>
-    {% set spectator = true %}
-    {% include "_run.html" %}
+    <section class="wall" aria-label="Live session wall">
+        <div class="wall-bar">
+            <div class="wall-counts">
+                <span class="wall-count wall-count-live"><span class="signal"></span><strong id="wall-live-n">0</strong> live</span>
+                <span class="wall-count"><strong id="wall-recent-n">0</strong> recent</span>
+            </div>
+            <span id="connection" class="connection" role="status">Connecting</span>
+        </div>
+        <div id="wall-grid" class="wall-grid" role="list"></div>
+        <div id="wall-empty" class="empty-inline wall-empty" hidden>
+            {{ icon("scan-line") }}
+            <p>No sessions yet.<span>Launch an attack to fill the wall.</span></p>
+        </div>
+    </section>
 {% endblock %}
 {% block scripts %}
-    <script>document.addEventListener('DOMContentLoaded', () => ArenaDemo.init());</script>
+    <script>document.addEventListener('DOMContentLoaded', () => ArenaWall.init());</script>
 {% endblock %}
