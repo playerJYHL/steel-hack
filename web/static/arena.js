@@ -127,8 +127,33 @@ class Poller {
   }
 }
 
+// The "possible targets" deck on the home page: a fanned stack of preview
+// cards that auto-shuffles which page is at the front.
+function initTargetDeck() {
+  const deck = document.querySelector(".target-deck");
+  if (!deck) return;
+  const cards = [...deck.querySelectorAll(".deck-card")];
+  if (cards.length < 2) return;
+  const n = cards.length;
+  let front = 0;
+  const place = () => {
+    // pos: 0 = front, 1 = peek-right, 2 = peek-left, cycling by offset.
+    cards.forEach((card, i) => {
+      card.dataset.pos = String((i - front + n) % n);
+    });
+  };
+  place();
+  if (reducedMotion()) return; // static fanned stack when motion is reduced
+  setInterval(() => {
+    if (document.hidden) return; // don't shuffle an unseen tab
+    front = (front + 1) % n;
+    place();
+  }, 3500);
+}
+
 const ArenaForm = {
   init() {
+    initTargetDeck();
     const form = $("attack-form"),
       payload = $("payload"),
       library = $("payload-library");

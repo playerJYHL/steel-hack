@@ -130,14 +130,21 @@
    rel="noopener"
    title="Open target page"
    aria-label="Open target page in a new tab">{{ icon("external-link") }}</a></div>
-                <a href="{{ url_for('scenario_preview') }}"
+                <a class="target-deck"
+                   href="{{ url_for('scenario_preview') }}"
                    target="_blank"
                    rel="noopener"
-                   aria-label="Inspect target page">
-                    <img src="{{ url_for('static', filename='target-preview.png') }}"
-                         width="1000"
-                         height="680"
-                         alt="Reference of the research article given to the agent">
+                   aria-label="Inspect a possible target page">
+                    {% for site in [('target-uwaterloo.png', 'University of Waterloo research page'), ('target-utoronto.png', 'University of Toronto research page'), ('target-antiquity.png', 'Antiquity research page')] %}
+                        <span class="deck-card" data-pos="{{ loop.index0 }}">
+                            <img src="{{ url_for('static', filename=site[0]) }}"
+                                 width="1000"
+                                 height="680"
+                                 alt="{{ site[1] }}"
+                                 loading="lazy"
+                                 draggable="false">
+                        </span>
+                    {% endfor %}
                 </a>
                 <div class="document-caption">TASK PAGE REFERENCE</div>
             </div>
